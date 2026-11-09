@@ -4,6 +4,8 @@ import type { WebAuthnVerifiers } from "./auth/passkeys";
 import { PUBLIC_AUTH_ROUTES, authRoutes } from "./auth/routes";
 import { requireSession } from "./auth/session";
 import type { Env } from "./env";
+import { exerciseRoutes } from "./routes/exercises";
+import { routineRoutes } from "./routes/routines";
 import { securityHeaders } from "./security/headers";
 import { requireSameOrigin } from "./security/origin";
 
@@ -49,6 +51,8 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   // Público: lo usan la CI y las comprobaciones de despliegue.
   app.get("/api/health", (c) => c.json({ ok: true }));
   app.route("/api/auth", authRoutes(webauthn));
+  app.route("/api/exercises", exerciseRoutes());
+  app.route("/api/routines", routineRoutes());
 
   return app;
 }
