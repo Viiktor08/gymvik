@@ -6,6 +6,7 @@ import { requireSession } from "./auth/session";
 import type { Env } from "./env";
 import { exerciseRoutes } from "./routes/exercises";
 import { routineRoutes } from "./routes/routines";
+import { workoutRoutes } from "./routes/workouts";
 import { securityHeaders } from "./security/headers";
 import { requireSameOrigin } from "./security/origin";
 
@@ -53,6 +54,7 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   app.route("/api/auth", authRoutes(webauthn));
   app.route("/api/exercises", exerciseRoutes());
   app.route("/api/routines", routineRoutes());
+  app.route("/api/workouts", workoutRoutes());
 
   return app;
 }
