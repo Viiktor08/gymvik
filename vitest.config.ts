@@ -1,4 +1,4 @@
-import { cloudflareTest } from "@cloudflare/vitest-plugin";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 // Vitest 4+ ya no admite vitest.workspace.ts: los proyectos se declaran aquí.
@@ -8,10 +8,20 @@ export default defineConfig({
   test: {
     projects: [
       {
-        plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./wrangler.jsonc" },
+            miniflare: {
+              // Las migraciones se leen en Node y llegan al Worker como un binding de prueba.
+              // test/worker/apply-migrations.ts las aplica a la D1 local antes de cada archivo de tests.
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("./migrations") },
+            },
+          })),
+        ],
         test: {
           name: "worker",
           include: ["test/worker/**/*.test.ts"],
+          setupFiles: ["./test/worker/apply-migrations.ts"],
         },
       },
       {

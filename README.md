@@ -31,10 +31,14 @@ La app queda en http://localhost:5173 y la API en `/api/*` (por ejemplo `/api/he
 | `npm test` | Tests con Vitest: proyecto `worker` (runtime de Workers) y proyecto `web` (jsdom). |
 | `npm run typecheck` | Comprueba tipos del Worker (`tsconfig.json`) y de la web (`tsconfig.web.json`). |
 | `npm run types` | Regenera `worker-configuration.d.ts` tras cambiar `wrangler.jsonc` o `.dev.vars.example`. |
+| `npm run seed:local` | Siembra los ejercicios de la biblioteca en la D1 local. Es idempotente. Antes: `npx wrangler d1 migrations apply gymvik --local`. |
+| `npm run seed:remote` | Lo mismo en la D1 de Cloudflare (solo cuando la base remota exista y tenga las migraciones aplicadas). |
 
 ## Estructura
 
 ```
+migrations/   Migraciones de D1 (esquema y ajustes por defecto)
+scripts/      Scripts de mantenimiento (semilla de ejercicios)
 src/worker/   Worker (Hono): API y tarea programada
 src/web/      App React
 src/shared/   Lógica de dominio pura, compartida por Worker y web

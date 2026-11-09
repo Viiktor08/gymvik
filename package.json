@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
-    "types": "wrangler types --env-file .dev.vars.example"
+    "types": "wrangler types --env-file .dev.vars.example",
+    "seed:local": "node scripts/seed.ts --local",
+    "seed:remote": "node scripts/seed.ts --remote"
   },
   "dependencies": {
     "hono": "^4.13.17",
