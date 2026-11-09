@@ -1,0 +1,16 @@
+node_modules
+dist
+.dist
+.wrangler
+.DS_Store
+*.log
+
+# Secretos: solo en `wrangler secret` o en .dev.vars (nunca versionados)
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+
+# Notas de trabajo locales
+.superpowers/

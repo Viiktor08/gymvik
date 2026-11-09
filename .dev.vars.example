@@ -1,0 +1,6 @@
+# Copia este archivo a .dev.vars (ignorado por git) y rellena los valores.
+# En producción se guardan con `wrangler secret put <NOMBRE>`. Nunca los versiones.
+SETUP_TOKEN=cambia-esto-por-un-token-largo-y-aleatorio
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:tu-correo@example.com
