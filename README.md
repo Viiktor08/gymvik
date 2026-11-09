@@ -10,7 +10,7 @@ El diseño completo está en [`docs/superpowers/specs/2026-11-09-gymvik-design.m
 
 ## Requisitos
 
-Node 20 o superior (la CI usa Node 24).
+Node `^22.22.2 || ^24.15.0 || >=26` (lo exigen Vitest 5, jsdom 31, Wrangler 4 y Vite 8). La CI usa Node 24.
 
 ## Puesta en marcha
 
