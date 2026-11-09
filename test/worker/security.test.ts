@@ -9,6 +9,7 @@ import { app } from "../../src/worker/index";
 import { randomToken, sha256Hex } from "../../src/worker/security/crypto";
 import { SECURITY_HEADERS } from "../../src/worker/security/headers";
 import { rateLimit } from "../../src/worker/security/rateLimit";
+import { authed } from "./helpers";
 
 // Las rutas de prueba se añaden antes de la primera petición: Hono congela el
 // router al resolver la primera ruta.
@@ -44,7 +45,8 @@ describe("securityHeaders", () => {
   });
 
   it("también las añade a las respuestas 404, con un JSON genérico", async () => {
-    const response = await request("/api/no-existe");
+    // Con sesión: sin ella la puerta respondería 401 antes de llegar al 404.
+    const response = await request("/api/no-existe", { headers: await authed() });
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "No encontrado" });
@@ -68,7 +70,7 @@ describe("securityHeaders", () => {
   it("también las añade a las respuestas de error, sin filtrar detalles internos", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const response = await app.request(`${ORIGIN}/api/__test/boom`, {}, env);
+    const response = await app.request(`${ORIGIN}/api/__test/boom`, { headers: await authed() }, env);
 
     expect(response.status).toBe(500);
     const text = await response.text();
@@ -83,7 +85,7 @@ describe("securityHeaders", () => {
   });
 
   it("respeta el estado de un HTTPException en lugar de convertirlo en 500", async () => {
-    const response = await app.request(`${ORIGIN}/api/__test/teapot`, {}, env);
+    const response = await app.request(`${ORIGIN}/api/__test/teapot`, { headers: await authed() }, env);
 
     expect(response.status).toBe(418);
     expect(await response.json()).toEqual({ error: "Soy una tetera" });
@@ -154,7 +156,7 @@ describe("requireSameOrigin", () => {
   );
 
   it("deja pasar un método que modifica datos con el Origin del propio sitio", async () => {
-    // Todavía no hay ruta: llega al 404, no se queda en el 403 de la comprobación.
+    // Pasa la comprobación de Origin: sin sesión se queda en el 401 de la puerta, no en el 403.
     const response = await request("/api/settings", { method: "POST", headers: { Origin: ORIGIN } });
 
     expect(response.status).not.toBe(403);

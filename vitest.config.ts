@@ -14,7 +14,11 @@ export default defineConfig({
             miniflare: {
               // Las migraciones se leen en Node y llegan al Worker como un binding de prueba.
               // test/worker/apply-migrations.ts las aplica a la D1 local antes de cada archivo de tests.
-              bindings: { TEST_MIGRATIONS: await readD1Migrations("./migrations") },
+              // SETUP_TOKEN es un valor de prueba: los secretos reales solo viven en wrangler secret y .dev.vars.
+              bindings: {
+                TEST_MIGRATIONS: await readD1Migrations("./migrations"),
+                SETUP_TOKEN: "token-de-prueba-solo-para-tests",
+              },
             },
           })),
         ],

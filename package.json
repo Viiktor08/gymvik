@@ -17,6 +17,7 @@
     "seed:remote": "node scripts/seed.ts --remote"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^14.0.3",
     "hono": "^4.13.17",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
