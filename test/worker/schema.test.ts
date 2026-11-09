@@ -87,6 +87,18 @@ describe("esquema de D1", () => {
     expect(await indexedColumns("workout_exercises")).toContainEqual(["exercise_id"]);
   });
 
+  it("indexa las claves foráneas de las tablas hijas con nombres estables", async () => {
+    const expected = ["idx_workout_exercises_workout_id", "idx_sets_workout_exercise_id", "idx_routine_items_routine_id"];
+    const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'").all<{
+      name: string;
+    }>();
+
+    expect(results.map((row) => row.name)).toEqual(expect.arrayContaining(expected));
+    expect(await indexedColumns("workout_exercises")).toContainEqual(["workout_id"]);
+    expect(await indexedColumns("sets")).toContainEqual(["workout_exercise_id"]);
+    expect(await indexedColumns("routine_items")).toContainEqual(["routine_id"]);
+  });
+
   it("inserta la configuración por defecto en una única fila", async () => {
     const { results } = await env.DB.prepare("SELECT * FROM settings").all();
 

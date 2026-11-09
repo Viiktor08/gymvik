@@ -40,6 +40,8 @@ CREATE TABLE routine_items (
   rest_seconds INTEGER NOT NULL DEFAULT 90
 );
 
+CREATE INDEX idx_routine_items_routine_id ON routine_items (routine_id);
+
 -- Entrenos. El id lo genera el cliente para que el envío sea idempotente.
 -- Si se borra la rutina de origen, el entreno se conserva como entreno libre.
 CREATE TABLE workouts (
@@ -61,6 +63,7 @@ CREATE TABLE workout_exercises (
   position INTEGER NOT NULL
 );
 
+CREATE INDEX idx_workout_exercises_workout_id ON workout_exercises (workout_id);
 CREATE INDEX idx_workout_exercises_exercise_id ON workout_exercises (exercise_id);
 
 -- Series de fuerza (weight_kg y reps) o de cardio (duration_min y distance_km).
@@ -74,6 +77,8 @@ CREATE TABLE sets (
   duration_min REAL,
   distance_km REAL
 );
+
+CREATE INDEX idx_sets_workout_exercise_id ON sets (workout_exercise_id);
 
 -- Peso y grasa corporal: solo entrada manual.
 CREATE TABLE body_metrics (
