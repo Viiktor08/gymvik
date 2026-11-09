@@ -3,11 +3,20 @@ import { sha256Hex } from "../security/crypto";
 const RECOVERY_CODE_COUNT = 8;
 
 // Alfabeto de Crockford en minúsculas (sin i, l, o, u): 32 símbolos, 5 bits cada
-// uno, sin caracteres que se confundan al copiarlos a mano. Dos grupos de 4
-// dan 40 bits por código.
+// uno, sin caracteres que se confundan al copiarlos a mano. Cuatro grupos de 4
+// dan 80 bits por código: con el hash SHA-256 sin sal, lo bastante para que
+// quien lea la tabla `recovery_codes` no pueda recuperar un código por fuerza
+// bruta.
 const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 const GROUP_LENGTH = 4;
-const CODE_LENGTH = GROUP_LENGTH * 2;
+const GROUP_COUNT = 4;
+const CODE_LENGTH = GROUP_LENGTH * GROUP_COUNT;
+
+function formatCode(symbols: string): string {
+  const groups: string[] = [];
+  for (let i = 0; i < symbols.length; i += GROUP_LENGTH) groups.push(symbols.slice(i, i + GROUP_LENGTH));
+  return groups.join("-");
+}
 
 /**
  * Símbolos aleatorios con `crypto.getRandomValues` y muestreo por rechazo: se
@@ -27,21 +36,20 @@ function randomSymbols(length: number): string {
 }
 
 function generateRecoveryCode(): string {
-  const symbols = randomSymbols(CODE_LENGTH);
-  return `${symbols.slice(0, GROUP_LENGTH)}-${symbols.slice(GROUP_LENGTH)}`;
+  return formatCode(randomSymbols(CODE_LENGTH));
 }
 
-/** Códigos con formato `xxxx-xxxx`, distintos entre sí. */
+/** Códigos con formato `xxxx-xxxx-xxxx-xxxx`, distintos entre sí. */
 export function generateRecoveryCodes(count: number = RECOVERY_CODE_COUNT): string[] {
   const codes = new Set<string>();
   while (codes.size < count) codes.add(generateRecoveryCode());
   return [...codes];
 }
 
-/** Tolera mayúsculas, espacios y guiones de más: `ABCD 1234` equivale a `abcd-1234`. */
+/** Tolera mayúsculas, espacios y guiones de más: `ABCD 1234 …` equivale a `abcd-1234-…`. */
 function normalize(input: string): string {
   const compact = input.toLowerCase().replace(/[\s-]/g, "");
-  return compact.length === CODE_LENGTH ? `${compact.slice(0, GROUP_LENGTH)}-${compact.slice(GROUP_LENGTH)}` : compact;
+  return compact.length === CODE_LENGTH ? formatCode(compact) : compact;
 }
 
 /** Hash SHA-256 con el que se guarda (y se busca) un código. */

@@ -23,7 +23,8 @@ const LOGOUT = "/api/auth/logout";
 const ME = "/api/auth/me";
 
 // Alfabeto de Crockford en minúsculas (sin i, l, o, u).
-const CODE_PATTERN = /^[0-9a-hjkmnp-tv-z]{4}-[0-9a-hjkmnp-tv-z]{4}$/;
+const CODE_PATTERN = /^[0-9a-hjkmnp-tv-z]{4}(-[0-9a-hjkmnp-tv-z]{4}){3}$/;
+const UNKNOWN_CODE = "zzzz-zzzz-zzzz-zzzz";
 const THIRTY_DAYS_SEC = 30 * 24 * 60 * 60;
 
 type TestApp = ReturnType<typeof createApp>;
@@ -624,7 +625,7 @@ describe("recuperación con código", () => {
     await send(app, "POST", RECOVER, { body: { code } });
 
     const reused = await send(app, "POST", RECOVER, { body: { code } });
-    const unknown = await send(app, "POST", RECOVER, { body: { code: "zzzz-zzzz" } });
+    const unknown = await send(app, "POST", RECOVER, { body: { code: UNKNOWN_CODE } });
 
     expect(reused.status).toBe(401);
     expect(unknown.status).toBe(401);
@@ -651,8 +652,8 @@ describe("recuperación con código", () => {
     const variants = [
       (codes[0] as string).toUpperCase(),
       ` ${codes[1]} `,
-      (codes[2] as string).replace("-", ""),
-      (codes[3] as string).replace("-", " "),
+      (codes[2] as string).replaceAll("-", ""),
+      (codes[3] as string).replaceAll("-", " "),
     ];
 
     for (const code of variants) {
@@ -1011,7 +1012,7 @@ describe("límite de peticiones y CSRF", () => {
     [SETUP_VERIFY, {}],
     [LOGIN_OPTIONS, undefined],
     [LOGIN_VERIFY, {}],
-    [RECOVER, { code: "zzzz-zzzz" }],
+    [RECOVER, { code: UNKNOWN_CODE }],
   ])("%s responde 429 a la petición 11 de una misma IP en un minuto", async (path, body) => {
     const { app } = buildApp();
     const ip = randomIp();
@@ -1032,7 +1033,7 @@ describe("límite de peticiones y CSRF", () => {
     const { body } = await completeSetup(app);
     const [code] = body.recoveryCodes as string[];
     const ip = randomIp();
-    for (let i = 0; i < 10; i += 1) await send(app, "POST", RECOVER, { ip, body: { code: "zzzz-zzzz" } });
+    for (let i = 0; i < 10; i += 1) await send(app, "POST", RECOVER, { ip, body: { code: UNKNOWN_CODE } });
 
     const blocked = await send(app, "POST", RECOVER, { ip, body: { code } });
     const elsewhere = await send(app, "POST", RECOVER, { ip: randomIp(), body: { code } });
