@@ -317,7 +317,11 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
           busy={finishing}
           error={finishError}
           onFinish={(saveToRoutine) => void finish(saveToRoutine)}
-          onClose={() => setPanel("none")}
+          // Mientras guarda, el entreno ya no está en el borrador (clearDraft): cerrar la hoja dejaría tocar la sesión y
+          // volvería a guardar un borrador con el mismo id. Se puede cerrar de nuevo si guardar falla.
+          onClose={() => {
+            if (!finishing) setPanel("none");
+          }}
         />
       ) : null}
 

@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { IDBFactory } from "fake-indexeddb";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Exercise, Routine, SetEntry } from "../../src/shared/types";
 import { Session } from "../../src/web/screens/Session";
@@ -691,6 +691,107 @@ describe("terminar", () => {
     expect(await loadDraft()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Listo" }));
     expect(await screen.findByText("PANTALLA HOY")).toBeTruthy();
+  });
+
+  it("Listo vuelve a Hoy sustituyendo la sesión en el historial: atrás no la recrea", async () => {
+    function Back() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          Atrás
+        </button>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={["/entreno", "/entreno/sesion?rutina=r-pecho"]} initialIndex={1}>
+        <Where />
+        <Back />
+        <Routes>
+          <Route path="/entreno/sesion" element={<Session />} />
+          <Route path="/entreno" element={<p>PANTALLA ENTRENO</p>} />
+          <Route path="/" element={<p>PANTALLA HOY</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await cardAppears("Press banca");
+    mark("Press banca", 1);
+    open("Terminar");
+    fireEvent.click(within(dialog("Terminar entreno")).getByRole("button", { name: "Guardar entreno" }));
+    await screen.findByRole("heading", { name: "Entreno terminado" });
+    fireEvent.click(screen.getByRole("button", { name: "Listo" }));
+    expect(await screen.findByText("PANTALLA HOY")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Atrás" }));
+
+    expect(await screen.findByText("PANTALLA ENTRENO")).toBeTruthy();
+    expect(screen.getByTestId("where").textContent).toBe("/entreno");
+    expect(await loadDraft()).toBeNull();
+  });
+
+  describe("mientras se guarda el entreno", () => {
+    // El envío de la cola es uno solo a la vez y dura lo que dure el PUT: un PUT sin soltar (porque un test falló
+    // a medias) bloquearía el envío de todos los tests que vienen detrás.
+    const releases: (() => void)[] = [];
+    afterEach(() => {
+      for (const release of releases.splice(0)) release();
+    });
+
+    /** Termina un entreno con el PUT en vuelo: el borrador ya está borrado y la hoja sigue abierta con "finishing". */
+    async function finishWithPutInFlight() {
+      let release: (response: Response) => void = () => undefined;
+      const pending = new Promise<Response>((resolve) => (release = resolve));
+      releases.push(() => release(json(200, { workout: {}, newRecords: [] })));
+      fetchMock.mockImplementation(async (input, init) => {
+        if ((init?.method ?? "GET") === "PUT") {
+          server.calls.push({ method: "PUT", path: String(input), body: undefined });
+          return pending;
+        }
+        return handle(input, init);
+      });
+      renderSession();
+      await cardAppears("Press banca");
+      mark("Press banca", 1);
+      open("Terminar");
+      const sheet = dialog("Terminar entreno");
+      fireEvent.click(within(sheet).getByRole("button", { name: "Guardar entreno" }));
+      await waitFor(() => expect(server.calls.some((call) => call.method === "PUT")).toBe(true));
+      await waitFor(async () => expect(await loadDraft()).toBeNull());
+      return { sheet, release: () => release(json(200, { workout: {}, newRecords: [] })) };
+    }
+
+    it("la hoja no se cierra ni con Cerrar, ni con Escape, ni tocando fuera", async () => {
+      const { sheet, release } = await finishWithPutInFlight();
+
+      fireEvent.click(within(sheet).getByRole("button", { name: "Cerrar" }));
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.click(sheet.parentElement as HTMLElement);
+
+      expect(screen.getByRole("dialog", { name: "Terminar entreno" })).toBeTruthy();
+      // El borrador ya está borrado: con la hoja abierta nada puede volver a guardarlo con el mismo id.
+      expect(await loadDraft()).toBeNull();
+      release();
+      expect(await screen.findByRole("heading", { name: "Entreno terminado" })).toBeTruthy();
+      expect(await loadDraft()).toBeNull();
+    });
+
+    it("si guardar falla en el móvil la hoja se puede cerrar otra vez", async () => {
+      renderSession();
+      await cardAppears("Press banca");
+      mark("Press banca", 1);
+      open("Terminar");
+      const sheet = dialog("Terminar entreno");
+      // Sin IndexedDB no se puede encolar el entreno: es el fallo local que devuelve "No se pudo guardar".
+      const open_ = vi.spyOn(globalThis.indexedDB, "open").mockImplementation(() => {
+        throw new Error("sin almacenamiento");
+      });
+      fireEvent.click(within(sheet).getByRole("button", { name: "Guardar entreno" }));
+      expect((await within(sheet).findByRole("alert")).textContent).toMatch(/No se pudo guardar el entreno en este móvil/);
+      open_.mockRestore();
+
+      fireEvent.click(within(sheet).getByRole("button", { name: "Cerrar" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Terminar entreno" })).toBeNull());
+    });
   });
 
   it("el resumen enseña duración, volumen, series y las notas, calculados con lo marcado", async () => {

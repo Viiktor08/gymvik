@@ -70,7 +70,7 @@ export function Session() {
   }, [routineId, free, replace, attempt]);
 
   if (finished) {
-    return <SessionSummary {...finished} onDone={() => navigate("/")} />;
+    return <SessionSummary {...finished} onDone={() => navigate("/", { replace: true })} />;
   }
 
   if (state.status === "loading") {
