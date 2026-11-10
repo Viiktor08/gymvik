@@ -4,11 +4,13 @@ import type { WebAuthnVerifiers } from "./auth/passkeys";
 import { PUBLIC_AUTH_ROUTES, authRoutes } from "./auth/routes";
 import { requireSession } from "./auth/session";
 import type { Env } from "./env";
+import { runNotifications } from "./push/cron";
 import { backupRoutes } from "./routes/backup";
 import { exerciseRoutes } from "./routes/exercises";
 import { hookKeyRoutes, hookRoutes } from "./routes/hooks";
 import { bodyMetricRoutes, creatineRoutes } from "./routes/metrics";
 import { progressRoutes } from "./routes/progress";
+import { pushRoutes } from "./routes/push";
 import { routineRoutes } from "./routes/routines";
 import { settingsRoutes } from "./routes/settings";
 import { todayRoutes } from "./routes/today";
@@ -63,6 +65,7 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   app.route("/api/today", todayRoutes());
   app.route("/api/progress", progressRoutes());
   app.route("/api/backup", backupRoutes());
+  app.route("/api/push", pushRoutes());
   app.route("/api/hook-keys", hookKeyRoutes());
   app.route("/api/hook", hookRoutes());
 
@@ -73,6 +76,8 @@ export const app = createApp();
 
 export default {
   fetch: app.fetch,
-  // Sin efecto hasta la Tarea 16 (avisos push cada 15 minutos).
-  async scheduled(_controller, _env, _ctx) {},
+  // Cada 15 minutos (triggers.crons en wrangler.jsonc): envía los avisos push que toquen.
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(runNotifications(env, new Date()));
+  },
 } satisfies ExportedHandler<Env>;
