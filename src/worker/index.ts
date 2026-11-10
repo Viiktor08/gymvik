@@ -5,7 +5,11 @@ import { PUBLIC_AUTH_ROUTES, authRoutes } from "./auth/routes";
 import { requireSession } from "./auth/session";
 import type { Env } from "./env";
 import { exerciseRoutes } from "./routes/exercises";
+import { bodyMetricRoutes, creatineRoutes } from "./routes/metrics";
+import { progressRoutes } from "./routes/progress";
 import { routineRoutes } from "./routes/routines";
+import { settingsRoutes } from "./routes/settings";
+import { todayRoutes } from "./routes/today";
 import { workoutRoutes } from "./routes/workouts";
 import { securityHeaders } from "./security/headers";
 import { requireSameOrigin } from "./security/origin";
@@ -55,6 +59,11 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   app.route("/api/exercises", exerciseRoutes());
   app.route("/api/routines", routineRoutes());
   app.route("/api/workouts", workoutRoutes());
+  app.route("/api/body-metrics", bodyMetricRoutes());
+  app.route("/api/creatine", creatineRoutes());
+  app.route("/api/settings", settingsRoutes());
+  app.route("/api/today", todayRoutes());
+  app.route("/api/progress", progressRoutes());
 
   return app;
 }

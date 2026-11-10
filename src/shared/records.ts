@@ -13,8 +13,10 @@ export interface SessionStats {
   bestPace: number | null;
 }
 
-const STRENGTH_KINDS: RecordKind[] = ["maxWeight", "best1RM", "volume"];
-const CARDIO_KINDS: RecordKind[] = ["maxDistance", "bestPace"];
+/** Tipos de récord de los ejercicios de fuerza (cualquier categoría que no sea cardio). */
+export const STRENGTH_KINDS: readonly RecordKind[] = ["maxWeight", "best1RM", "volume"];
+/** Tipos de récord de los ejercicios de cardio. */
+export const CARDIO_KINDS: readonly RecordKind[] = ["maxDistance", "bestPace"];
 
 // Un valor solo cuenta si es un número finito mayor que 0; null, NaN e Infinity no aportan nada.
 function positive(value: number | null): value is number {

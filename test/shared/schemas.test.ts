@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   backupSchema,
+  bodyMetricInputSchema,
   creatineHookSchema,
   exerciseInputSchema,
   routineSchema,
@@ -225,6 +226,31 @@ describe("settingsPatchSchema", () => {
     expect(settingsPatchSchema.safeParse({ stepsGoal: -1 }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ creatineGrams: 0 }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ displayName: "  " }).success).toBe(false);
+  });
+});
+
+describe("bodyMetricInputSchema", () => {
+  it("acepta el peso solo, con grasa o con grasa null", () => {
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5 }).success).toBe(true);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: 18.2 }).success).toBe(true);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: null }).success).toBe(true);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: 0 }).success).toBe(true);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: 100 }).success).toBe(true);
+  });
+
+  it("rechaza un peso ausente, cero, negativo, no numérico o infinito", () => {
+    expect(bodyMetricInputSchema.safeParse({}).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 0 }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: -70 }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: "78,5" }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: Infinity }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: NaN }).success).toBe(false);
+  });
+
+  it("rechaza una grasa fuera de 0–100 o no numérica", () => {
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: -0.1 }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: 100.1 }).success).toBe(false);
+    expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: "18" }).success).toBe(false);
   });
 });
 

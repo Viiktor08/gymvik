@@ -8,10 +8,10 @@ import { workoutSchema } from "../../shared/schemas";
 import type { Routine, Workout } from "../../shared/types";
 import { listExercises } from "../db/exercises";
 import { findRoutine, replaceRoutine, routineExists } from "../db/routines";
+import { getTimezone } from "../db/settings";
 import {
   deleteWorkout,
   findWorkout,
-  getTimezone,
   listWorkoutSummaries,
   listWorkoutsWithExercises,
   replaceWorkout,

@@ -35,6 +35,10 @@ const nonNegative = z.number().min(0);
 
 const gramsSchema = z.number().positive().max(100);
 
+const weightKgSchema = z.number().positive();
+
+const bodyFatPctSchema = z.number().min(0).max(100);
+
 const MAX_STEPS = 200_000;
 
 const stepsSchema = z.number().int().min(0).max(MAX_STEPS);
@@ -168,6 +172,14 @@ export const settingsPatchSchema = z.strictObject({
   notifications: z.partialRecord(notificationTypeSchema, notificationPatchSchema).optional(),
 });
 
+// --- Peso y grasa corporal ---
+
+/** Cuerpo de `PUT /api/body-metrics/:date`. La fecha va en la URL; sin grasa (o null) se guarda null. */
+export const bodyMetricInputSchema = z.object({
+  weightKg: weightKgSchema,
+  bodyFatPct: bodyFatPctSchema.nullable().optional(),
+});
+
 // --- Atajos de iOS y NFC ---
 
 export const stepsHookSchema = z.object({
@@ -190,8 +202,8 @@ export const backupSchema = z.object({
   bodyMetrics: z.array(
     z.object({
       localDate: localDateSchema,
-      weightKg: z.number().positive(),
-      bodyFatPct: z.number().min(0).max(100).nullable(),
+      weightKg: weightKgSchema,
+      bodyFatPct: bodyFatPctSchema.nullable(),
     }),
   ),
   dailySteps: z.array(

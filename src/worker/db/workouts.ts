@@ -51,14 +51,6 @@ const WORKOUT_COLUMNS = "id, routine_id, started_at, ended_at, local_date, notes
 // Del más reciente al más antiguo; a igualdad de día, el que empezó más tarde primero.
 const NEWEST_FIRST = "ORDER BY local_date DESC, started_at DESC, id DESC";
 
-const DEFAULT_TIMEZONE = "Europe/Madrid";
-
-/** La zona horaria de los ajustes (fila única). */
-export async function getTimezone(db: D1Database): Promise<string> {
-  const row = await db.prepare("SELECT timezone FROM settings WHERE id = 1").first<{ timezone: string }>();
-  return row?.timezone ?? DEFAULT_TIMEZONE;
-}
-
 /** Une cada entreno con sus ejercicios y series. Las filas ya vienen ordenadas por posición. */
 function assemble(workouts: WorkoutRow[], exercises: WorkoutExerciseRow[], sets: SetRow[]): Workout[] {
   const setsByExercise = new Map<number, SetEntry[]>();
@@ -144,6 +136,34 @@ export async function listWorkoutsWithExercises(
        SELECT workout_id FROM workout_exercises WHERE exercise_id IN (SELECT value FROM json_each(?2)))`,
     [excludeId, JSON.stringify(exerciseIds)],
   );
+}
+
+/**
+ * Los entrenos donde aparece el ejercicio, con todos sus ejercicios y series, del más reciente al más
+ * antiguo: de ellos salen las sesiones y los récords del ejercicio.
+ */
+export async function listWorkoutsOfExercise(db: D1Database, exerciseId: string): Promise<Workout[]> {
+  return loadWorkouts(
+    db,
+    "id IN (SELECT workout_id FROM workout_exercises WHERE exercise_id = ?1)",
+    [exerciseId],
+  );
+}
+
+/** Los entrenos con `local_date` entre `from` y `to` (YYYY-MM-DD, ambos incluidos), con sus series. */
+export async function listWorkoutsBetween(db: D1Database, from: string, to: string): Promise<Workout[]> {
+  return loadWorkouts(db, "local_date >= ?1 AND local_date <= ?2", [from, to]);
+}
+
+/** Lo justo de cada entreno para saber qué rutina toca y cuántos se han hecho cada semana. */
+export type WorkoutRef = { routineId: string | null; startedAt: string; localDate: string };
+
+/** Todos los entrenos, sin ejercicios ni series, en un orden sin garantizar. */
+export async function listWorkoutRefs(db: D1Database): Promise<WorkoutRef[]> {
+  const { results } = await db
+    .prepare("SELECT routine_id, started_at, local_date FROM workouts")
+    .all<{ routine_id: string | null; started_at: string; local_date: string }>();
+  return results.map((row) => ({ routineId: row.routine_id, startedAt: row.started_at, localDate: row.local_date }));
 }
 
 function durationMinutes(startedAt: string, endedAt: string): number {
