@@ -91,6 +91,14 @@ export async function authenticateSession(c: AppContext): Promise<string | null>
   return row === null ? null : token;
 }
 
+/**
+ * Hash del token de la sesión de la petición. Solo vale en rutas que ya han
+ * pasado la puerta de sesión (la cookie existe y es válida).
+ */
+export async function currentSessionHash(c: AppContext): Promise<string> {
+  return sha256Hex(getCookie(c, SESSION_COOKIE) ?? "");
+}
+
 const COOKIE_ATTRIBUTES = {
   path: "/",
   secure: true,

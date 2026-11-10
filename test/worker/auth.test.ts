@@ -947,6 +947,90 @@ describe("gestión de passkeys", () => {
     expect(await rowCount("passkeys")).toBe(2);
   });
 
+  describe("al quitar una passkey", () => {
+    const asSession = (token: string) => ({ ...cookieHeader(token), Origin: ORIGIN });
+    const status = async (app: TestApp, token: string) => (await send(app, "GET", PASSKEYS, { headers: cookieHeader(token) })).status;
+
+    it("cierra todas las demás sesiones y conserva la de quien la quita", async () => {
+      const { app } = buildApp();
+      await insertPasskey("movil-perdido", "iPhone viejo");
+      await insertPasskey("movil-nuevo", "iPhone nuevo");
+      const current = await createSession(env.DB);
+      const lostPhone = await createSession(env.DB);
+      const other = await createSession(env.DB);
+
+      const response = await send(app, "DELETE", `${PASSKEYS}/movil-perdido`, { headers: asSession(current) });
+
+      expect(response.status).toBe(200);
+      expect(await rowCount("sessions")).toBe(1);
+      expect(await status(app, lostPhone)).toBe(401);
+      expect(await status(app, other)).toBe(401);
+      expect(await status(app, current)).toBe(200);
+      // La sesión que queda sigue renovándose: no se ha tocado su cookie.
+      expect(sessionTokenFrom(response)).toBe(current);
+    });
+
+    it("la sesión del dispositivo perdido no se puede volver a usar ni renovar", async () => {
+      const { app } = buildApp();
+      await insertPasskey("movil-perdido");
+      await insertPasskey("movil-nuevo");
+      const current = await createSession(env.DB);
+      const lostPhone = await createSession(env.DB);
+      await send(app, "DELETE", `${PASSKEYS}/movil-perdido`, { headers: asSession(current) });
+
+      const renewal = await send(app, "GET", ME, { headers: cookieHeader(lostPhone) });
+
+      expect(((await renewal.json()) as Json).authenticated).toBe(false);
+      expect(renewal.headers.getSetCookie()).toEqual([]);
+    });
+
+    it("no cierra ninguna sesión si era la única passkey (409)", async () => {
+      const { app } = buildApp();
+      await insertPasskey("unica");
+      const current = await createSession(env.DB);
+      const other = await createSession(env.DB);
+
+      const response = await send(app, "DELETE", `${PASSKEYS}/unica`, { headers: asSession(current) });
+
+      expect(response.status).toBe(409);
+      expect(await rowCount("sessions")).toBe(2);
+      expect(await status(app, other)).toBe(200);
+    });
+
+    it("no cierra ninguna sesión si la passkey no existe (404)", async () => {
+      const { app } = buildApp();
+      await insertPasskey("una");
+      await insertPasskey("otra");
+      const current = await createSession(env.DB);
+      const other = await createSession(env.DB);
+
+      const response = await send(app, "DELETE", `${PASSKEYS}/no-existe`, { headers: asSession(current) });
+
+      expect(response.status).toBe(404);
+      expect(await rowCount("sessions")).toBe(2);
+      expect(await status(app, other)).toBe(200);
+    });
+
+    it("con dos borrados simultáneos, la cuenta conserva una passkey y la sesión de quien los pidió", async () => {
+      const { app } = buildApp();
+      await insertPasskey("una");
+      await insertPasskey("otra");
+      const current = await createSession(env.DB);
+      const other = await createSession(env.DB);
+
+      const responses = await Promise.all([
+        send(app, "DELETE", `${PASSKEYS}/una`, { headers: asSession(current) }),
+        send(app, "DELETE", `${PASSKEYS}/otra`, { headers: asSession(current) }),
+      ]);
+
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(await rowCount("passkeys")).toBe(1);
+      // El borrado que perdió no cierra nada; el que ganó cierra las demás.
+      expect(await status(app, other)).toBe(401);
+      expect(await status(app, current)).toBe(200);
+    });
+  });
+
   it("borrar dos passkeys a la vez nunca deja la cuenta sin ninguna", async () => {
     const { app } = buildApp();
     await insertPasskey("una");

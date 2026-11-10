@@ -26,7 +26,14 @@ import {
   insertRecoveryCodeStatements,
   regenerateRecoveryCodes,
 } from "./recovery";
-import { authenticateSession, closeSession, openSession, recoverSession, setSessionCookie } from "./session";
+import {
+  authenticateSession,
+  closeSession,
+  currentSessionHash,
+  openSession,
+  recoverSession,
+  setSessionCookie,
+} from "./session";
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -270,7 +277,8 @@ export function authRoutes(deps: Partial<WebAuthnVerifiers> = {}): Hono<{ Bindin
   });
 
   auth.delete("/passkeys/:id", async (c) => {
-    const outcome = await deletePasskey(c.env.DB, c.req.param("id"));
+    // Quitar una passkey cierra las demás sesiones (un dispositivo perdido deja de entrar); la de quien la quita se queda.
+    const outcome = await deletePasskey(c.env.DB, c.req.param("id"), await currentSessionHash(c));
     if (outcome === "missing") throw new HTTPException(404, { message: "Passkey no encontrada" });
     if (outcome === "last") throw new HTTPException(409, { message: "No puedes borrar tu única passkey" });
     return c.json({ ok: true });

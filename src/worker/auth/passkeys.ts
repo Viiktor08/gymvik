@@ -263,16 +263,33 @@ export async function updatePasskeyCounter(db: D1Database, credentialId: string,
 }
 
 /**
- * Borra una passkey salvo que sea la última. El recuento y el borrado van en
- * una sola sentencia: dos borrados simultáneos no pueden dejar la cuenta sin
- * ninguna passkey.
+ * Borra una passkey salvo que sea la última y, en el mismo lote, cierra todas las
+ * sesiones menos `keepTokenHash` (la de quien la quita): las sesiones no están
+ * ligadas a una passkey, así que quitar la de un móvil perdido no echaría a ese
+ * móvil si su sesión siguiera viva. Las dos sentencias llevan la misma condición
+ * (la passkey existe y quedan otras) y D1 ejecuta el lote como una transacción:
+ * dos borrados simultáneos no pueden dejar la cuenta sin ninguna passkey, y un
+ * borrado que no se hace (última o inexistente) no cierra ninguna sesión.
  */
-export async function deletePasskey(db: D1Database, credentialId: string): Promise<"deleted" | "last" | "missing"> {
-  const result = await db
-    .prepare("DELETE FROM passkeys WHERE credential_id = ? AND (SELECT COUNT(*) FROM passkeys) > 1")
-    .bind(credentialId)
-    .run();
-  if (result.meta.changes > 0) return "deleted";
+export async function deletePasskey(
+  db: D1Database,
+  credentialId: string,
+  keepTokenHash: string,
+): Promise<"deleted" | "last" | "missing"> {
+  const [, deleted] = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM sessions
+         WHERE token_hash <> ?1
+           AND EXISTS (SELECT 1 FROM passkeys WHERE credential_id = ?2)
+           AND (SELECT COUNT(*) FROM passkeys) > 1`,
+      )
+      .bind(keepTokenHash, credentialId),
+    db
+      .prepare("DELETE FROM passkeys WHERE credential_id = ? AND (SELECT COUNT(*) FROM passkeys) > 1")
+      .bind(credentialId),
+  ]);
+  if (deleted !== undefined && deleted.meta.changes > 0) return "deleted";
   const exists = await db.prepare("SELECT 1 AS found FROM passkeys WHERE credential_id = ?").bind(credentialId).first();
   return exists === null ? "missing" : "last";
 }
