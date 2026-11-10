@@ -259,7 +259,7 @@ describe("rutas de la app", () => {
     ["/entreno/rutina/abc", "Rutina"],
     ["/entreno/sesion", "Entreno en curso"],
     ["/entreno/historial", "Historial"],
-    ["/entreno/historial/abc", "Detalle del entreno"],
+    ["/entreno/historial/abc", "Entreno"],
     ["/entreno/biblioteca", "Biblioteca"],
     ["/ejercicio/abc", "Ejercicio"],
     ["/progreso?tab=semana", "Progreso"],

@@ -1362,3 +1362,32 @@ select.input {
   list-style: none;
   text-align: right;
 }
+
+/* --- Historial --- */
+
+.history-week-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-week-head h2 {
+  font-size: 1rem;
+}
+
+.history-week-head .muted {
+  flex: none;
+  font-size: 0.875rem;
+}
+
+.history-row-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.list-row .history-row-text .muted {
+  font-size: 0.875rem;
+  text-align: left;
+}

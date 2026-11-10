@@ -1,6 +1,6 @@
 import { formatThousands, localDate, weekStart } from "../../shared/dates";
 import type { RecordKind } from "../../shared/records";
-import type { Exercise, Workout, WorkoutExercise } from "../../shared/types";
+import type { Exercise, SetEntry, Workout, WorkoutExercise } from "../../shared/types";
 import { weeklySummary } from "../../shared/weekly";
 import { formatDecimal, formatPace } from "../format";
 import type { Draft } from "./draftStore";
@@ -18,6 +18,17 @@ function whole(value: number | null, max = Number.MAX_SAFE_INTEGER): number | nu
 
 const MAX_RIR = 10;
 
+/** Una serie con solo los cinco campos de `SetEntry` y los valores dentro de lo que admite el servidor. */
+export function sanitizeSet(set: SetEntry): SetEntry {
+  return {
+    weightKg: nonNegative(set.weightKg),
+    reps: whole(set.reps),
+    rir: whole(set.rir, MAX_RIR),
+    durationMin: nonNegative(set.durationMin),
+    distanceKm: nonNegative(set.distanceKm),
+  };
+}
+
 /**
  * Las series marcadas ✓ de cada ejercicio, sin el campo `done` y con los valores dentro de lo que admite el
  * servidor (nada negativo, repeticiones y RIR enteros, RIR de 0 a 10). Los ejercicios sin ninguna marcada no salen.
@@ -25,15 +36,7 @@ const MAX_RIR = 10;
 export function doneExercises(draft: Draft): WorkoutExercise[] {
   const exercises: WorkoutExercise[] = [];
   for (const exercise of draft.exercises) {
-    const sets = exercise.sets
-      .filter((set) => set.done)
-      .map((set) => ({
-        weightKg: nonNegative(set.weightKg),
-        reps: whole(set.reps),
-        rir: whole(set.rir, MAX_RIR),
-        durationMin: nonNegative(set.durationMin),
-        distanceKm: nonNegative(set.distanceKm),
-      }));
+    const sets = exercise.sets.filter((set) => set.done).map(sanitizeSet);
     if (sets.length > 0) exercises.push({ exerciseId: exercise.exerciseId, sets });
   }
   return exercises;
