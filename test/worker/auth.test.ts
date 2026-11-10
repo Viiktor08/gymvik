@@ -837,6 +837,69 @@ describe("sesión", () => {
     expect(cookie).toContain(`Max-Age=${THIRTY_DAYS_SEC}`);
   });
 
+  describe("renovación de la sesión", () => {
+    const HOUR_MS = 3_600_000;
+
+    async function sessionWithLastSeen(msAgo: number): Promise<{ token: string; lastSeen: string; expires: string }> {
+      const token = await createSession(env.DB);
+      const lastSeen = new Date(Date.now() - msAgo).toISOString();
+      const expires = new Date(Date.now() - msAgo + THIRTY_DAYS_SEC * 1000).toISOString();
+      await env.DB.prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE token_hash = ?")
+        .bind(lastSeen, expires, await sha256Hex(token))
+        .run();
+      return { token, lastSeen, expires };
+    }
+
+    async function rowOf(token: string) {
+      return env.DB.prepare("SELECT last_seen_at, expires_at FROM sessions WHERE token_hash = ?")
+        .bind(await sha256Hex(token))
+        .first<Json>();
+    }
+
+    it("si se usó hace menos de una hora no escribe en la base de datos, pero sigue dando acceso y enviando la cookie", async () => {
+      const { token, lastSeen, expires } = await sessionWithLastSeen(10 * 60_000);
+
+      const response = await api(PASSKEYS, { headers: cookieHeader(token) });
+
+      expect(response.status).toBe(200);
+      expect(await rowOf(token)).toEqual({ last_seen_at: lastSeen, expires_at: expires });
+      // La cookie sí se vuelve a enviar con su Max-Age completo: la caducidad en el navegador sigue siendo de 30 días.
+      expect(sessionTokenFrom(response)).toBe(token);
+      expect(response.headers.getSetCookie()[0]).toContain(`Max-Age=${THIRTY_DAYS_SEC}`);
+    });
+
+    it("pasada una hora la renueva: last_seen_at y expires_at (+30 días)", async () => {
+      const { token } = await sessionWithLastSeen(HOUR_MS + 60_000);
+
+      const response = await api(PASSKEYS, { headers: cookieHeader(token) });
+
+      expect(response.status).toBe(200);
+      const row = await rowOf(token);
+      expect(Math.abs(Date.parse(row?.last_seen_at) - Date.now())).toBeLessThan(60_000);
+      expect(Math.abs(Date.parse(row?.expires_at) - (Date.now() + THIRTY_DAYS_SEC * 1000))).toBeLessThan(60_000);
+    });
+
+    it("una sesión caducada sigue dando 401 aunque se hubiera usado hace menos de una hora", async () => {
+      const { token } = await sessionWithLastSeen(10 * 60_000);
+      await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ?")
+        .bind(new Date(Date.now() - 1000).toISOString(), await sha256Hex(token))
+        .run();
+
+      const response = await api(PASSKEYS, { headers: cookieHeader(token) });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("/me tampoco escribe si se usó hace menos de una hora", async () => {
+      const { token, lastSeen, expires } = await sessionWithLastSeen(5 * 60_000);
+
+      const response = await api(ME, { headers: cookieHeader(token) });
+
+      expect(((await response.json()) as Json).authenticated).toBe(true);
+      expect(await rowOf(token)).toEqual({ last_seen_at: lastSeen, expires_at: expires });
+    });
+  });
+
   it("createSession devuelve el token en claro y guarda solo su hash, con caducidad a 30 días", async () => {
     const token = await createSession(env.DB);
 

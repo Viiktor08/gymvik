@@ -72,23 +72,37 @@ export async function recoverSession(db: D1Database, code: string): Promise<stri
   return consumed?.meta.changes === 1 ? token : null;
 }
 
+/** Una sesión se renueva en la base de datos como mucho una vez por hora: cada petición escribiría en D1. */
+export const SESSION_RENEW_INTERVAL_MS = 60 * 60 * 1000;
+
 /**
- * Valida la cookie de sesión de la petición y, si es válida, la renueva
- * (`last_seen_at` y `expires_at`) en una sola sentencia. Devuelve el token o
- * `null` si falta, no existe o ha caducado.
+ * Valida la cookie de sesión de la petición. Si es válida y se renovó por última
+ * vez hace más de una hora, la renueva (`last_seen_at` y `expires_at`); si no,
+ * solo la lee, sin escribir. La caducidad por falta de uso sigue siendo de 30
+ * días (con una imprecisión de como mucho una hora en la base de datos; la cookie
+ * sí se renueva en cada respuesta). Devuelve el token, o `null` si falta, no
+ * existe o ha caducado.
  */
 export async function authenticateSession(c: AppContext): Promise<string | null> {
   const token = getCookie(c, SESSION_COOKIE);
   if (!token) return null;
   const now = Date.now();
-  const row = await c.env.DB.prepare(
-    `UPDATE sessions SET last_seen_at = ?1, expires_at = ?2
-     WHERE token_hash = ?3 AND expires_at > ?1
-     RETURNING token_hash`,
-  )
-    .bind(new Date(now).toISOString(), expiresAt(now), await sha256Hex(token))
-    .first();
-  return row === null ? null : token;
+  const nowIso = new Date(now).toISOString();
+  const hash = await sha256Hex(token);
+  const session = await c.env.DB.prepare("SELECT last_seen_at FROM sessions WHERE token_hash = ?1 AND expires_at > ?2")
+    .bind(hash, nowIso)
+    .first<{ last_seen_at: string }>();
+  if (session === null) return null;
+  if (now - Date.parse(session.last_seen_at) >= SESSION_RENEW_INTERVAL_MS) {
+    // La condición se repite en el UPDATE para que dos peticiones simultáneas no escriban dos veces.
+    await c.env.DB.prepare(
+      `UPDATE sessions SET last_seen_at = ?1, expires_at = ?2
+       WHERE token_hash = ?3 AND expires_at > ?1 AND last_seen_at <= ?4`,
+    )
+      .bind(nowIso, expiresAt(now), hash, new Date(now - SESSION_RENEW_INTERVAL_MS).toISOString())
+      .run();
+  }
+  return token;
 }
 
 /**

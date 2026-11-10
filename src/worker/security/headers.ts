@@ -16,7 +16,10 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 /**
  * Añade las cabeceras de seguridad a toda respuesta, también a las 404 y a las
  * de error (el 404 y onError de Hono se resuelven dentro de la cadena, antes de
- * que `next()` devuelva el control).
+ * que `next()` devuelva el control). Las respuestas de /api/* llevan además
+ * `Cache-Control: no-store`: son datos personales (o una sesión) y ninguna caché,
+ * ni la del navegador ni la de un intermediario, debe guardarlas. Los estáticos
+ * no pasan por el Worker y no la llevan.
  */
 export function securityHeaders(): MiddlewareHandler {
   return async (c, next) => {
@@ -24,5 +27,6 @@ export function securityHeaders(): MiddlewareHandler {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
       c.res.headers.set(name, value);
     }
+    if (c.req.path.startsWith("/api/")) c.res.headers.set("Cache-Control", "no-store");
   };
 }

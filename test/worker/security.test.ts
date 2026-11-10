@@ -93,6 +93,59 @@ describe("securityHeaders", () => {
   });
 });
 
+describe("Cache-Control de /api/*", () => {
+  const NO_STORE = "no-store";
+
+  it("lo llevan las respuestas correctas, las de error y las que no pasan la puerta de sesión", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const headers = await authed();
+
+    const responses = {
+      health: await request("/api/health"),
+      settings: await request("/api/settings", { headers }),
+      notFound: await request("/api/no-existe", { headers }),
+      unauthenticated: await request("/api/settings"),
+      forbidden: await request("/api/settings", { method: "POST", headers: { Origin: "https://evil.example" } }),
+      teapot: await app.request(`${ORIGIN}/api/__test/teapot`, { headers }, env),
+      boom: await app.request(`${ORIGIN}/api/__test/boom`, { headers }, env),
+    };
+
+    expect(responses.health.status).toBe(200);
+    expect(responses.settings.status).toBe(200);
+    expect(responses.notFound.status).toBe(404);
+    expect(responses.unauthenticated.status).toBe(401);
+    expect(responses.forbidden.status).toBe(403);
+    expect(responses.teapot.status).toBe(418);
+    expect(responses.boom.status).toBe(500);
+    for (const [name, response] of Object.entries(responses)) {
+      expect(response.headers.get("cache-control"), name).toBe(NO_STORE);
+    }
+    log.mockRestore();
+  });
+
+  it("lo llevan también las rutas de auth, aunque sean públicas", async () => {
+    const response = await request("/api/auth/me");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe(NO_STORE);
+  });
+
+  it("no cambia lo que ya ponía una ruta: las claves de atajo siguen con no-store, una sola vez", async () => {
+    const response = await request("/api/hook-keys", {
+      method: "POST",
+      headers: await authed({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ label: "Atajo", scopes: ["steps"] }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe(NO_STORE);
+  });
+
+  it("no es una cabecera de securityHeaders() para los estáticos: public/_headers no la declara", () => {
+    expect(SECURITY_HEADERS).not.toHaveProperty("Cache-Control");
+  });
+});
+
 describe("public/_headers", () => {
   // run_worker_first es solo /api/*: el HTML y los estáticos no pasan por el
   // Worker, así que sus cabeceras salen de este archivo.
@@ -259,6 +312,39 @@ describe("rateLimit", () => {
 
     expect(statuses.filter((status) => status === 200)).toHaveLength(LIMIT);
     expect(statuses.filter((status) => status === 429)).toHaveLength(25 - LIMIT);
+  });
+
+  it("cuando el cubo ya superó su límite no vuelve a escribir en la ventana actual", async () => {
+    const { hit } = buildApp({ limit: 3 });
+    const bucket = randomToken(8);
+    for (let i = 0; i < 3; i += 1) await hit(bucket);
+    expect((await hit(bucket)).status).toBe(429);
+    const before = await readRow(bucket);
+
+    for (let i = 0; i < 5; i += 1) {
+      const blocked = await hit(bucket);
+
+      expect(blocked.status).toBe(429);
+      const retryAfter = Number(blocked.headers.get("retry-after"));
+      expect(retryAfter).toBeGreaterThan(0);
+      expect(retryAfter).toBeLessThanOrEqual(60);
+    }
+
+    expect(await readRow(bucket)).toEqual(before);
+  });
+
+  it("un cubo que ya superó el límite en una ventana vieja vuelve a contar desde 1 en la nueva", async () => {
+    const { hit } = buildApp({ limit: 2 });
+    const bucket = randomToken(8);
+    for (let i = 0; i < 4; i += 1) await hit(bucket);
+    await env.DB.prepare("UPDATE rate_limits SET window_start = window_start - 61 WHERE bucket = ?")
+      .bind(`test:${bucket}`)
+      .run();
+
+    expect((await hit(bucket)).status).toBe(200);
+    expect((await hit(bucket)).status).toBe(200);
+    expect((await hit(bucket)).status).toBe(429);
+    expect((await readRow(bucket))?.count).toBeGreaterThanOrEqual(2);
   });
 
   it("empieza una ventana nueva cuando la anterior ha caducado", async () => {
