@@ -319,6 +319,23 @@ describe("peso", () => {
     expect(body.weekWeightDelta).toBeNull();
   });
 
+  it.each([
+    ["más de 7 días", "2026-11-01"],
+    ["justo 7 días", "2026-11-05"],
+  ])("si el único peso es de hace %s no hay tendencia, pero el último peso sale", async (_name, weightDate) => {
+    // Los dos pesos que se comparan serían el mismo registro: no hay ninguna medida de esta semana.
+    await insertWeight(weightDate, 80, 18);
+    const body = await today("?date=2026-11-12");
+    expect(body.lastWeight).toEqual({ localDate: weightDate, weightKg: 80, bodyFatPct: 18 });
+    expect(body.weekWeightDelta).toBeNull();
+  });
+
+  it("si el último peso ya es de hace 7 días o más, aunque haya otros anteriores, no hay tendencia", async () => {
+    await insertWeight("2026-10-20", 82);
+    await insertWeight("2026-11-03", 80);
+    expect((await today("?date=2026-11-12")).weekWeightDelta).toBeNull();
+  });
+
   it("sin ningún peso hasta la fecha, ambos son null", async () => {
     await insertWeight("2026-11-20", 78);
     const body = await today("?date=2026-11-12");

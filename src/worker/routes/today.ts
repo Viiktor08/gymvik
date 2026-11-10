@@ -65,9 +65,12 @@ export function todayRoutes(): Hono<{ Bindings: Env }> {
       steps,
       stepsGoal: settings.stepsGoal,
       lastWeight,
-      // Los dos pesos se toman "hasta" su fecha: si falta alguno no hay tendencia.
+      // Los dos pesos se toman "hasta" su fecha. Sin tendencia si falta alguno o si son el mismo registro
+      // (el último ya es de hace 7 días o más: no hay ninguna medida de esta semana con la que comparar).
       weekWeightDelta:
-        lastWeight === null || weightWeekAgo === null ? null : round2(lastWeight.weightKg - weightWeekAgo.weightKg),
+        lastWeight === null || weightWeekAgo === null || lastWeight.localDate === weightWeekAgo.localDate
+          ? null
+          : round2(lastWeight.weightKg - weightWeekAgo.weightKg),
       creatineToday,
       week: { count: week.count, goal: settings.weeklyGoal, days: week.days },
     };
