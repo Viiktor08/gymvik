@@ -13,13 +13,16 @@ type Loaded = {
   nextId: string | null;
 };
 
+/** Qué rutina toca según el servidor; `null` si no hay ninguna o si Hoy no responde (entonces no se marca ninguna). */
+async function fetchNextId(): Promise<string | null> {
+  const today = await api<TodayData>("/api/today").catch(() => null);
+  return today?.next?.routine.id ?? null;
+}
+
 async function fetchLoaded(): Promise<Loaded> {
   // La lista es lo imprescindible; qué rutina toca solo la completa.
-  const [routines, today] = await Promise.all([
-    api<Routine[]>("/api/routines"),
-    api<TodayData>("/api/today").catch(() => null),
-  ]);
-  return { routines, nextId: today?.next?.routine.id ?? null };
+  const [routines, nextId] = await Promise.all([api<Routine[]>("/api/routines"), fetchNextId()]);
+  return { routines, nextId };
 }
 
 function exerciseCount(n: number): string {
@@ -101,7 +104,9 @@ export function Workouts() {
     setMoveError(null);
     try {
       const routines = await api<Routine[]>("/api/routines/reorder", { method: "POST", body: JSON.stringify({ ids }) });
-      setData({ ...state.data, routines });
+      // "Te toca" depende del orden de la rotación: se vuelve a pedir a Hoy y se cambia todo a la vez, sin pantalla de carga.
+      // Si Hoy no responde no se deja la etiqueta de antes (sería la de otra rutina): se quita hasta recargar.
+      setData({ routines, nextId: await fetchNextId() });
     } catch (failure) {
       setMoveError(failureMessage(failure, "No se pudo cambiar el orden"));
     } finally {

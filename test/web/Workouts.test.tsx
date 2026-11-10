@@ -31,7 +31,8 @@ type Call = { method: string; path: string; body: unknown };
 
 const server = {
   routines: [PECHO, ESPALDA, PIERNA, BRAZOS],
-  nextId: "r-espalda" as string | null,
+  // La última rutina de la rotación que se completó: "te toca" es la siguiente en el orden actual (circular).
+  lastDoneId: "r-pecho" as string | null,
   routinesFail: null as "offline" | 500 | null,
   todayFails: false,
   reorderStatus: 200,
@@ -57,7 +58,10 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path === "/api/today") {
     if (server.todayFails) return json(500, { error: "Error interno" });
-    const next = server.routines.find((r) => r.id === server.nextId);
+    // Como el servidor: se recalcula con el orden que haya en ese momento.
+    const rotation = server.routines.filter((r) => r.inRotation).sort((a, b) => a.rotationOrder - b.rotationOrder);
+    const lastIndex = rotation.findIndex((r) => r.id === server.lastDoneId);
+    const next = rotation[(lastIndex + 1) % rotation.length];
     return json(200, { next: next ? { routine: next, estimatedMin: 40 } : null });
   }
   if (path === "/api/routines/reorder" && method === "POST") {
@@ -95,9 +99,15 @@ function routinesIn(section: string): string[] {
     .map((heading) => heading.textContent ?? "");
 }
 
+/** El nombre de la rutina que lleva la etiqueta SIGUIENTE (null si no hay etiqueta). */
+function nextLabelOn(): string | null {
+  const label = screen.queryByText("SIGUIENTE");
+  return label?.closest("li")?.querySelector("h3")?.textContent ?? null;
+}
+
 beforeEach(() => {
   server.routines = [PECHO, ESPALDA, PIERNA, BRAZOS];
-  server.nextId = "r-espalda";
+  server.lastDoneId = "r-pecho";
   server.routinesFail = null;
   server.todayFails = false;
   server.reorderStatus = 200;
@@ -168,7 +178,6 @@ describe("Entreno: estructura", () => {
 describe("Entreno: estados vacíos y errores", () => {
   it("sin rutinas invita a crear la primera, y Entreno libre sigue disponible", async () => {
     server.routines = [];
-    server.nextId = null;
     await renderLoaded();
     expect(screen.getByText("Todavía no tienes rutinas")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Entreno libre" })).toBeTruthy();
@@ -178,7 +187,6 @@ describe("Entreno: estados vacíos y errores", () => {
 
   it("con rutinas pero ninguna en rotación lo dice en esa sección", async () => {
     server.routines = [BRAZOS];
-    server.nextId = null;
     await renderLoaded();
     expect(within(screen.getByRole("region", { name: "En rotación" })).getByText("Ninguna rutina en la rotación.")).toBeTruthy();
     expect(routinesIn("Otras rutinas")).toEqual(["Brazos"]);
@@ -237,6 +245,38 @@ describe("Entreno: reordenar la rotación", () => {
     expect((screen.getByRole("button", { name: "Bajar Pierna" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("button", { name: "Subir Brazos" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Bajar Brazos" })).toBeNull();
+  });
+
+  it("tras reordenar, la etiqueta SIGUIENTE sigue a la rutina que ahora toca", async () => {
+    await renderLoaded();
+    // Con el orden Pecho, Espalda, Pierna y Pecho hecha la última, toca Espalda.
+    expect(nextLabelOn()).toBe("Espalda");
+    // Pierna sube encima de Espalda: ahora, tras Pecho, toca Pierna.
+    fireEvent.click(screen.getByRole("button", { name: "Subir Pierna" }));
+    await waitFor(() => expect(routinesIn("En rotación")).toEqual(["Pecho", "Pierna", "Espalda"]));
+    await waitFor(() => expect(nextLabelOn()).toBe("Pierna"));
+    expect(screen.getAllByText("SIGUIENTE")).toHaveLength(1);
+  });
+
+  it("al reordenar pide Hoy sin volver a la pantalla de carga", async () => {
+    await renderLoaded();
+    const todayCalls = () => server.calls.filter((call) => call.path === "/api/today").length;
+    expect(todayCalls()).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Subir Pierna" }));
+    expect(screen.queryByText("Cargando…")).toBeNull();
+    await waitFor(() => expect(todayCalls()).toBe(2));
+    expect(screen.queryByText("Cargando…")).toBeNull();
+    await waitFor(() => expect(nextLabelOn()).toBe("Pierna"));
+  });
+
+  it("si Hoy falla tras reordenar, el orden se repinta y no queda una etiqueta desfasada", async () => {
+    await renderLoaded();
+    expect(nextLabelOn()).toBe("Espalda");
+    server.todayFails = true;
+    fireEvent.click(screen.getByRole("button", { name: "Subir Pierna" }));
+    await waitFor(() => expect(routinesIn("En rotación")).toEqual(["Pecho", "Pierna", "Espalda"]));
+    await waitFor(() => expect(screen.queryByText("SIGUIENTE")).toBeNull());
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("si el servidor falla, avisa y deja el orden como estaba", async () => {
