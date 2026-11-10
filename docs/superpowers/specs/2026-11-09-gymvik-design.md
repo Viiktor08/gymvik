@@ -153,7 +153,7 @@ Si una suscripción devuelve 404 o 410, se borra. Requisito en iPhone: app añad
 ## 8. Seguridad
 
 - **Primer acceso:** `/setup` con un token de configuración (`SETUP_TOKEN`, secreto de Wrangler). Solo funciona mientras no exista ninguna passkey. Al registrar la primera passkey se generan **8 códigos de recuperación** de un solo uso, que se muestran una vez y se guardan como hash SHA-256.
-- **Login:** solo passkey (WebAuthn, verificación de usuario obligatoria). Recuperación: un código de un solo uso da una sesión y lleva directamente a registrar una passkey nueva.
+- **Login:** solo passkey (WebAuthn, verificación de usuario obligatoria). Recuperación: un código de un solo uso cierra todas las demás sesiones (un dispositivo perdido o robado deja de tener acceso), da una sesión nueva y lleva directamente a registrar una passkey nueva.
 - **Sesión:** cookie `__Host-session` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`). Token aleatorio de 32 bytes guardado como hash. Caduca tras 30 días sin uso (se renueva al usarla). Cerrar sesión la revoca.
 - **CSRF:** en los métodos que modifican datos de `/api/*` (excepto `/api/hook/*`), la cabecera `Origin` debe ser la del propio sitio.
 - **Claves de atajo:** formato `fk_` + 32 bytes aleatorios en base64url. Se muestran una sola vez y se guardan como hash SHA-256. Tienen permisos, se pueden revocar, registran el último uso y **solo dan acceso a `/api/hook/*`**.

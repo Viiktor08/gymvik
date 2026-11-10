@@ -85,16 +85,3 @@ export async function regenerateRecoveryCodes(db: D1Database): Promise<string[]>
   await db.batch([db.prepare("DELETE FROM recovery_codes"), ...insertRecoveryCodeStatements(db, hashes)]);
   return codes;
 }
-
-/**
- * Marca un código como usado. Es una única sentencia, así que con peticiones
- * simultáneas solo una lo consigue. `false` cubre por igual un código ya usado
- * y uno que no existe: quien llama no debe distinguirlos.
- */
-export async function consumeRecoveryCode(db: D1Database, input: string): Promise<boolean> {
-  const row = await db
-    .prepare("UPDATE recovery_codes SET used_at = ?1 WHERE code_hash = ?2 AND used_at IS NULL RETURNING code_hash")
-    .bind(new Date().toISOString(), await hashRecoveryCode(input))
-    .first();
-  return row !== null;
-}

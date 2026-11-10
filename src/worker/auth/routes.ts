@@ -21,13 +21,12 @@ import {
   type WebAuthnVerifiers,
 } from "./passkeys";
 import {
-  consumeRecoveryCode,
   generateRecoveryCodes,
   hashRecoveryCode,
   insertRecoveryCodeStatements,
   regenerateRecoveryCodes,
 } from "./recovery";
-import { authenticateSession, closeSession, openSession, setSessionCookie } from "./session";
+import { authenticateSession, closeSession, openSession, recoverSession, setSessionCookie } from "./session";
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -235,11 +234,11 @@ export function authRoutes(deps: Partial<WebAuthnVerifiers> = {}): Hono<{ Bindin
 
   auth.post("/recover", async (c) => {
     const { code } = await readJson(c, recoverBodySchema);
-    // Código usado e inexistente son indistinguibles desde fuera.
-    if (!(await consumeRecoveryCode(c.env.DB, code))) {
-      throw new HTTPException(401, { message: "Código de recuperación no válido" });
-    }
-    await openSession(c);
+    // Código usado e inexistente son indistinguibles desde fuera. Si vale, cierra
+    // todas las demás sesiones y abre solo la nueva.
+    const token = await recoverSession(c.env.DB, code);
+    if (token === null) throw new HTTPException(401, { message: "Código de recuperación no válido" });
+    setSessionCookie(c, token);
     return c.json({ mustRegisterPasskey: true });
   });
 

@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Env } from "../env";
 import { randomToken, sha256Hex } from "../security/crypto";
+import { hashRecoveryCode } from "./recovery";
 
 export const SESSION_COOKIE = "__Host-session";
 
@@ -30,6 +31,45 @@ export async function createSession(db: D1Database): Promise<string> {
       .bind(await sha256Hex(token), nowIso, expiresAt(now)),
   ]);
   return token;
+}
+
+/**
+ * Canjea un código de recuperación. Si es válido, lo marca como usado, borra
+ * TODAS las sesiones (un dispositivo perdido o robado deja de tener acceso) y
+ * abre una sola nueva; devuelve su token. Si el código no existe o ya se usó,
+ * no toca nada y devuelve `null`: los dos casos son indistinguibles desde fuera.
+ *
+ * Va en un único lote, que D1 ejecuta como una transacción sin intercalar otras
+ * peticiones. La sesión nueva solo se inserta si el código sigue sin usar, y
+ * solo entonces el borrado encuentra su token y vacía las demás; el código se
+ * consume al final. Con peticiones simultáneas con el mismo código, el lote de
+ * las que pierden no inserta ni borra nada, así que no pueden dejar sin sesión
+ * a la ganadora.
+ */
+export async function recoverSession(db: D1Database, code: string): Promise<string | null> {
+  const token = randomToken(32);
+  const tokenHash = await sha256Hex(token);
+  const codeHash = await hashRecoveryCode(code);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const [, , consumed] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO sessions (token_hash, created_at, last_seen_at, expires_at)
+         SELECT ?1, ?2, ?2, ?3
+         WHERE EXISTS (SELECT 1 FROM recovery_codes WHERE code_hash = ?4 AND used_at IS NULL)`,
+      )
+      .bind(tokenHash, nowIso, expiresAt(now), codeHash),
+    db
+      .prepare(
+        "DELETE FROM sessions WHERE token_hash <> ?1 AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?1)",
+      )
+      .bind(tokenHash),
+    db
+      .prepare("UPDATE recovery_codes SET used_at = ?1 WHERE code_hash = ?2 AND used_at IS NULL")
+      .bind(nowIso, codeHash),
+  ]);
+  return consumed?.meta.changes === 1 ? token : null;
 }
 
 /**

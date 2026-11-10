@@ -636,14 +636,56 @@ describe("recuperación con código", () => {
   it("con peticiones simultáneas con el mismo código solo una tiene éxito", async () => {
     const { app } = buildApp();
     const [code] = await codesAfterSetup(app);
-    const sessionsBefore = await rowCount("sessions");
 
     const responses = await Promise.all(
       Array.from({ length: 5 }, () => send(app, "POST", RECOVER, { body: { code } })),
     );
 
     expect(responses.map((response) => response.status).sort()).toEqual([200, 401, 401, 401, 401]);
-    expect(await rowCount("sessions")).toBe(sessionsBefore + 1);
+    // Solo queda la sesión del que ganó: ni la del primer acceso ni las de los perdedores.
+    const winner = responses.find((response) => response.status === 200) as Response;
+    expect(await rowCount("sessions")).toBe(1);
+    expect((await send(app, "GET", PASSKEYS, { headers: cookieHeader(sessionTokenFrom(winner)) })).status).toBe(200);
+  });
+
+  it("recuperar la cuenta cierra todas las sesiones anteriores y deja solo la nueva", async () => {
+    const { app } = buildApp();
+    const { response: setup, body } = await completeSetup(app);
+    const lost = sessionTokenFrom(setup);
+    const other = await createSession(env.DB);
+    const [code] = body.recoveryCodes as string[];
+
+    const response = await send(app, "POST", RECOVER, { body: { code } });
+
+    expect(response.status).toBe(200);
+    const fresh = sessionTokenFrom(response);
+    expect(await rowCount("sessions")).toBe(1);
+    for (const token of [lost, other]) {
+      expect((await send(app, "GET", PASSKEYS, { headers: cookieHeader(token) })).status, token).toBe(401);
+    }
+    expect((await send(app, "GET", PASSKEYS, { headers: cookieHeader(fresh) })).status).toBe(200);
+  });
+
+  it("un código inválido o ya usado no cierra ninguna sesión", async () => {
+    const { app } = buildApp();
+    const { response: setup, body } = await completeSetup(app);
+    const existing = sessionTokenFrom(setup);
+    const [code] = body.recoveryCodes as string[];
+    const recovered = await send(app, "POST", RECOVER, { body: { code } });
+    const current = sessionTokenFrom(recovered);
+    const bystander = await createSession(env.DB);
+
+    for (const attempt of [UNKNOWN_CODE, code as string, "no es un código"]) {
+      const rejected = await send(app, "POST", RECOVER, { body: { code: attempt } });
+
+      expect(rejected.status, attempt).toBe(401);
+      expect(rejected.headers.getSetCookie()).toEqual([]);
+    }
+    expect(existing).not.toBe(current);
+    expect(await rowCount("sessions")).toBe(2);
+    for (const token of [current, bystander]) {
+      expect((await send(app, "GET", PASSKEYS, { headers: cookieHeader(token) })).status, token).toBe(200);
+    }
   });
 
   it("acepta el código escrito en mayúsculas, con espacios o sin guion", async () => {
@@ -680,10 +722,10 @@ describe("recuperación con código", () => {
 
   it("regenerar los códigos invalida los anteriores, usados o no", async () => {
     const { app } = buildApp();
-    const { response: setup, body } = await completeSetup(app);
-    const token = sessionTokenFrom(setup);
+    const { body } = await completeSetup(app);
     const [used, unused] = body.recoveryCodes as string[];
-    await send(app, "POST", RECOVER, { body: { code: used } });
+    // Recuperar cierra la sesión del primer acceso: se sigue con la nueva.
+    const token = sessionTokenFrom(await send(app, "POST", RECOVER, { body: { code: used } }));
 
     const regenerated = await send(app, "POST", RECOVERY_CODES, { headers: cookieHeader(token) });
 
