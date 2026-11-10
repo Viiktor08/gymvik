@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Category, Exercise } from "../../shared/types";
 import { CATEGORIES, CATEGORY_LABELS, matchesSearch, sortExercises } from "../exerciseUtils";
-import { loadExercises } from "../session/offlineData";
+import { LOAD_TIMEOUT_MS, loadExercises } from "../session/offlineData";
 import { useLoad } from "../useLoad";
 import { LoadError } from "./LoadError";
 
@@ -13,11 +13,12 @@ type Props = {
 type CategoryFilter = Category | "all";
 
 /**
- * Buscador y filtros por categoría sobre la biblioteca. No ofrece los ejercicios archivados. Sin conexión usa
- * la copia guardada en el móvil, para poder añadir ejercicios a un entreno en el gimnasio sin cobertura.
+ * Buscador y filtros por categoría sobre la biblioteca. No ofrece los ejercicios archivados. Sin conexión, o con
+ * una señal que no responde en `LOAD_TIMEOUT_MS`, usa la copia guardada en el móvil, para poder añadir ejercicios
+ * a un entreno en el gimnasio sin cobertura (con poca señal una petición puede no fallar nunca).
  */
 export function ExercisePicker({ onPick }: Props) {
-  const { state, reload } = useLoad(async () => sortExercises((await loadExercises({ archived: false })).data));
+  const { state, reload } = useLoad(async () => sortExercises((await loadExercises({ archived: false, timeoutMs: LOAD_TIMEOUT_MS })).data));
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
 
