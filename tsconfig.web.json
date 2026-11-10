@@ -5,5 +5,6 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src/web", "src/shared", "test/web", "test/shared"]
+  "include": ["src/web", "src/shared", "test/web", "test/shared"],
+  "exclude": ["src/web/sw.ts", "test/web/sw.test.ts", "test/web/pwaAssets.test.ts"]
 }

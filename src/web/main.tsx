@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { App } from "./App";
+import { registerServiceWorker } from "./pwa";
 import "./styles.css";
 import { applyTheme, cachedTheme } from "./theme";
 
@@ -18,3 +19,6 @@ createRoot(root).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// El service worker precachea la app para abrirla sin red y recibe los avisos push.
+registerServiceWorker();

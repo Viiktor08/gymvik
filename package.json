@@ -11,8 +11,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.sw.json",
     "types": "wrangler types --env-file .dev.vars.example",
+    "icons": "node scripts/generate-icons.ts",
     "seed:local": "node scripts/seed.ts --local",
     "seed:remote": "node scripts/seed.ts --remote"
   },
@@ -41,7 +42,12 @@
     "jsdom": "^31.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.7",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0",
+    "workbox-build": "^7.4.1",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
     "wrangler": "^4.159.0"
   }
 }

@@ -1,9 +1,9 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { Settings as UserSettings } from "../../shared/types";
 import { api } from "../api";
-import { appVersion } from "../appVersion";
 import { LoadError } from "../components/LoadError";
 import { AccountSection } from "../settings/AccountSection";
+import { AppSection } from "../settings/AppSection";
 import { DataSection } from "../settings/DataSection";
 import { GoalsSection } from "../settings/GoalsSection";
 import { NotificationsSection } from "../settings/NotificationsSection";
@@ -13,21 +13,6 @@ import { ThemeSection } from "../settings/ThemeSection";
 import { WeightSection } from "../settings/WeightSection";
 import { applyTheme } from "../theme";
 import { useLoad } from "../useLoad";
-
-/** Versión instalada. El botón "Actualizar" lo conecta el service worker (Tarea 24). */
-function AppSection() {
-  const titleId = useId();
-  return (
-    <section className="stack" aria-labelledby={titleId}>
-      <h2 id={titleId}>Aplicación</h2>
-      <div className="card">
-        <p>
-          Versión instalada: <strong>{appVersion}</strong>
-        </p>
-      </div>
-    </section>
-  );
-}
 
 /** Ajustes (spec §5.7). Cada sección guarda lo suyo; los ajustes se piden una vez y reparten sus valores iniciales. */
 export function Settings() {

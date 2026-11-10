@@ -29,10 +29,15 @@ La app queda en http://localhost:5173 y la API en `/api/*` (por ejemplo `/api/he
 | `npm run dev` | Servidor de desarrollo (Vite + Worker local con D1). |
 | `npm run build` | Compila el front y el Worker en `dist/`. |
 | `npm test` | Tests con Vitest: proyecto `worker` (runtime de Workers) y proyecto `web` (jsdom). |
-| `npm run typecheck` | Comprueba tipos del Worker (`tsconfig.json`) y de la web (`tsconfig.web.json`). |
+| `npm run typecheck` | Comprueba tipos del Worker (`tsconfig.json`), de la web (`tsconfig.web.json`) y del service worker (`tsconfig.sw.json`, lib de WebWorker). |
+| `npm run icons` | Regenera los iconos de `public/icons/` (PNG 192, 512, maskable y de iOS, más el SVG). Solo hace falta si cambia el dibujo; los PNG están versionados. |
 | `npm run types` | Regenera `worker-configuration.d.ts` tras cambiar `wrangler.jsonc` o `.dev.vars.example`. |
 | `npm run seed:local` | Siembra los ejercicios de la biblioteca en la D1 local. Es idempotente. Antes: `npx wrangler d1 migrations apply gymvik --local`. |
 | `npm run seed:remote` | Lo mismo en la D1 de Cloudflare (solo cuando la base remota exista y tenga las migraciones aplicadas). |
+
+## PWA
+
+`npm run build` genera `dist/client/sw.js` (service worker: precaché de la app, avisos push y actualización a petición) y `manifest.webmanifest` con vite-plugin-pwa. El service worker solo se registra en la versión compilada: para probar el modo sin conexión, los avisos o Ajustes → Actualizar hay que usar `npm run build && npm run preview`, no `npm run dev`.
 
 ## Estructura
 

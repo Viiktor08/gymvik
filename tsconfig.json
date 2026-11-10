@@ -18,6 +18,7 @@
     "src/worker",
     "src/shared",
     "test/worker",
+    "test/web/pwaAssets.test.ts",
     "scripts",
     "vite.config.ts",
     "vitest.config.ts"
