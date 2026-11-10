@@ -172,7 +172,8 @@ describe("requireSameOrigin", () => {
     for (const headers of [evil, undefined]) {
       const response = await request("/api/hook/creatine", { method: "POST", headers });
 
-      expect(response.status).not.toBe(403);
+      // Sin clave, el hook responde 401: llega a su propia autenticación, no se queda en el 403 del Origin.
+      expect(response.status).toBe(401);
     }
   });
 

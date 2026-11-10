@@ -2,8 +2,9 @@ import type { MiddlewareHandler } from "hono";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-// Con la barra final: /api/hook-keys NO es un hook.
-const HOOK_PREFIX = "/api/hook/";
+// Con la barra final: /api/hook-keys NO es un hook. Los hooks de los Atajos se autentican con su propia
+// clave Bearer, no con la cookie de sesión, así que quedan fuera de la puerta de sesión y del control CSRF.
+export const HOOK_PREFIX = "/api/hook/";
 
 /**
  * Defensa CSRF (spec §8): los métodos que modifican datos deben llevar una

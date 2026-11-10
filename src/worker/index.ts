@@ -5,6 +5,7 @@ import { PUBLIC_AUTH_ROUTES, authRoutes } from "./auth/routes";
 import { requireSession } from "./auth/session";
 import type { Env } from "./env";
 import { exerciseRoutes } from "./routes/exercises";
+import { hookKeyRoutes, hookRoutes } from "./routes/hooks";
 import { bodyMetricRoutes, creatineRoutes } from "./routes/metrics";
 import { progressRoutes } from "./routes/progress";
 import { routineRoutes } from "./routes/routines";
@@ -12,11 +13,7 @@ import { settingsRoutes } from "./routes/settings";
 import { todayRoutes } from "./routes/today";
 import { workoutRoutes } from "./routes/workouts";
 import { securityHeaders } from "./security/headers";
-import { requireSameOrigin } from "./security/origin";
-
-// Con la barra final: /api/hook-keys NO es un hook. Los hooks de los Atajos se
-// autentican con su propia clave Bearer, no con la cookie de sesión.
-const HOOK_PREFIX = "/api/hook/";
+import { HOOK_PREFIX, requireSameOrigin } from "./security/origin";
 
 // Rutas /api/* que no exigen sesión (`MÉTODO ruta`). Todo lo demás, exista ya o
 // no, pasa por requireSession.
@@ -64,6 +61,8 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   app.route("/api/settings", settingsRoutes());
   app.route("/api/today", todayRoutes());
   app.route("/api/progress", progressRoutes());
+  app.route("/api/hook-keys", hookKeyRoutes());
+  app.route("/api/hook", hookRoutes());
 
   return app;
 }

@@ -5,9 +5,11 @@ import type { Env } from "../env";
 // cualquier windowSec en uso (minutos).
 const RETENTION_SEC = 24 * 60 * 60;
 
-export type RateLimitOptions = {
+type RateLimitEnv = { Bindings: Env };
+
+export type RateLimitOptions<E extends RateLimitEnv = RateLimitEnv> = {
   /** Clave del contador, por ejemplo `login:<ip>` o `hook:<id de la clave>`. */
-  bucket: (c: Context<{ Bindings: Env }>) => string;
+  bucket: (c: Context<E>) => string;
   /** Peticiones permitidas por ventana. */
   limit: number;
   /** Duración de la ventana, en segundos. */
@@ -20,7 +22,7 @@ export type RateLimitOptions = {
  * y se actualiza con una única sentencia, así que es atómico aunque lleguen
  * peticiones simultáneas.
  */
-export function rateLimit(options: RateLimitOptions): MiddlewareHandler<{ Bindings: Env }> {
+export function rateLimit<E extends RateLimitEnv = RateLimitEnv>(options: RateLimitOptions<E>): MiddlewareHandler<E> {
   const { bucket, limit, windowSec } = options;
   return async (c, next) => {
     const now = Math.floor(Date.now() / 1000);

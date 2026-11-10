@@ -182,6 +182,18 @@ export const bodyMetricInputSchema = z.object({
 
 // --- Atajos de iOS y NFC ---
 
+export const hookScopeSchema = z.enum(["creatine", "steps"]);
+
+/** Cuerpo de `POST /api/hook-keys`. Al menos un permiso; los repetidos se quitan. */
+export const hookKeyInputSchema = z.object({
+  label: z.string().trim().min(1).max(100),
+  scopes: z
+    .array(hookScopeSchema)
+    .min(1)
+    .max(10)
+    .transform((scopes) => [...new Set(scopes)]),
+});
+
 export const stepsHookSchema = z.object({
   steps: stepsSchema,
   date: localDateSchema.optional(),

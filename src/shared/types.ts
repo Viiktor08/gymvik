@@ -79,3 +79,17 @@ export type Settings = {
   // `time` es la hora local en formato HH:MM.
   notifications: Record<NotificationType, { enabled: boolean; time: string }>;
 };
+
+// Permisos de una clave de atajo: cada uno abre un hook de /api/hook/*.
+export type HookScope = "creatine" | "steps";
+
+// Una clave de atajo tal como la lista la API: nunca incluye el secreto ni su hash.
+export type HookKey = {
+  id: string;
+  label: string;
+  scopes: HookScope[];
+  // Instantes en UTC (ISO 8601).
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};

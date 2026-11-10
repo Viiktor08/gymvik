@@ -98,6 +98,18 @@ export async function getSteps(db: D1Database, localDate: string): Promise<numbe
   return row?.steps ?? null;
 }
 
+/** Guarda los pasos del día reemplazando los que hubiera (el último valor enviado es el que vale). */
+export async function upsertSteps(db: D1Database, localDate: string, steps: number): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO daily_steps (local_date, steps) VALUES (?1, ?2)
+       ON CONFLICT (local_date) DO UPDATE SET
+         steps = excluded.steps, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+    )
+    .bind(localDate, steps)
+    .run();
+}
+
 /** Los pasos de los días entre `from` y `to` (YYYY-MM-DD, ambos incluidos). */
 export async function listSteps(
   db: D1Database,
@@ -145,6 +157,27 @@ export async function upsertCreatine(
     .first<CreatineRow>();
   if (row === null) throw new Error(`La creatina del ${localDate} desapareció tras guardarla`);
   return { localDate: row.local_date, grams: row.grams, source: row.source };
+}
+
+/**
+ * Marca el día solo si no estaba marcado, en una única sentencia (atómica aunque lleguen dos peticiones a la
+ * vez). Devuelve la toma creada, o null si ya existía una: esa no se toca.
+ */
+export async function insertCreatineIfAbsent(
+  db: D1Database,
+  localDate: string,
+  grams: number,
+  source: CreatineLog["source"],
+): Promise<CreatineLog | null> {
+  const row = await db
+    .prepare(
+      `INSERT INTO creatine_logs (local_date, grams, source) VALUES (?1, ?2, ?3)
+       ON CONFLICT (local_date) DO NOTHING
+       RETURNING local_date, grams, source`,
+    )
+    .bind(localDate, grams, source)
+    .first<CreatineRow>();
+  return row === null ? null : { localDate: row.local_date, grams: row.grams, source: row.source };
 }
 
 /** Desmarca el día. False si no había toma. */

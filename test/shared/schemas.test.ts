@@ -4,6 +4,7 @@ import {
   bodyMetricInputSchema,
   creatineHookSchema,
   exerciseInputSchema,
+  hookKeyInputSchema,
   routineSchema,
   settingsPatchSchema,
   settingsSchema,
@@ -251,6 +252,27 @@ describe("bodyMetricInputSchema", () => {
     expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: -0.1 }).success).toBe(false);
     expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: 100.1 }).success).toBe(false);
     expect(bodyMetricInputSchema.safeParse({ weightKg: 78.5, bodyFatPct: "18" }).success).toBe(false);
+  });
+});
+
+describe("hookKeyInputSchema", () => {
+  it("acepta una etiqueta y uno o varios permisos, recorta la etiqueta y quita los repetidos", () => {
+    expect(hookKeyInputSchema.parse({ label: " NFC ", scopes: ["creatine"] })).toEqual({
+      label: "NFC",
+      scopes: ["creatine"],
+    });
+    expect(hookKeyInputSchema.parse({ label: "Todo", scopes: ["steps", "creatine", "steps"] }).scopes).toEqual([
+      "steps",
+      "creatine",
+    ]);
+  });
+
+  it("rechaza permisos vacíos, desconocidos o ausentes y etiquetas vacías o larguísimas", () => {
+    expect(hookKeyInputSchema.safeParse({ label: "x", scopes: [] }).success).toBe(false);
+    expect(hookKeyInputSchema.safeParse({ label: "x", scopes: ["weight"] }).success).toBe(false);
+    expect(hookKeyInputSchema.safeParse({ label: "x" }).success).toBe(false);
+    expect(hookKeyInputSchema.safeParse({ label: "  ", scopes: ["steps"] }).success).toBe(false);
+    expect(hookKeyInputSchema.safeParse({ label: "x".repeat(101), scopes: ["steps"] }).success).toBe(false);
   });
 });
 

@@ -760,9 +760,15 @@ describe("sesión", () => {
   it("deja pasar sin sesión solo /api/health, /api/hook/* y las rutas públicas de auth", async () => {
     expect((await api("/api/health")).status).toBe(200);
     expect((await api("/api/auth/me")).status).toBe(200);
-    // Los hooks se autentican con su propia clave Bearer (otra tarea): aquí aún no hay ruta.
-    expect((await api("/api/hook/creatine", { method: "POST" })).status).toBe(404);
-    expect((await api("/api/hook/steps", { headers: { Origin: ORIGIN } })).status).toBe(404);
+    // Los hooks se autentican con su propia clave Bearer, no con la cookie: sin clave responden con su 401, que
+    // no es el de la puerta de sesión.
+    const hook = await api("/api/hook/creatine", { method: "POST" });
+    expect(hook.status).toBe(401);
+    expect(await hook.json()).not.toEqual({ error: "No autenticado" });
+    // Un método sin ruta de hook llega al 404 de siempre, no a la puerta de sesión.
+    const getHook = await api("/api/hook/steps", { headers: { Origin: ORIGIN } });
+    expect(getHook.status).toBe(404);
+    expect(await getHook.json()).not.toEqual({ error: "No autenticado" });
     // Cada ruta pública lo es solo con su método.
     expect((await api("/api/health", { method: "DELETE", headers: { Origin: ORIGIN } })).status).toBe(401);
     expect((await api(RECOVER)).status).toBe(401);

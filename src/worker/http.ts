@@ -16,6 +16,27 @@ export async function readJson<S extends z.ZodType>(c: Context, schema: S): Prom
   } catch {
     throw new HTTPException(400, { message: "JSON no válido" });
   }
+  return validate(schema, body);
+}
+
+/**
+ * Como `readJson`, pero un cuerpo vacío o en blanco equivale a `{}`: un Atajo de iOS puede no enviar nada.
+ * Un cuerpo con contenido que no es JSON sigue siendo un 400.
+ */
+export async function readOptionalJson<S extends z.ZodType>(c: Context, schema: S): Promise<z.output<S>> {
+  const text = await c.req.text();
+  let body: unknown = {};
+  if (text.trim() !== "") {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new HTTPException(400, { message: "JSON no válido" });
+    }
+  }
+  return validate(schema, body);
+}
+
+function validate<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const parsed = schema.safeParse(body);
   if (!parsed.success) throw new HTTPException(400, { message: "Datos no válidos" });
   return parsed.data;
