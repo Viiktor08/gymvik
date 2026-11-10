@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../src/web/App";
@@ -39,6 +39,8 @@ describe("Marco de la app: envío en segundo plano", () => {
       </MemoryRouter>,
     );
     await screen.findByRole("navigation", { name: "Principal" });
+    // El envío se arranca en un efecto de React, que corre después de que el DOM ya muestra la barra.
+    await waitFor(() => expect(sync.startBackgroundSync).toHaveBeenCalled());
 
     expect(sync.startBackgroundSync).toHaveBeenCalledTimes(1);
     expect(sync.stop).not.toHaveBeenCalled();

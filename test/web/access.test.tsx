@@ -21,11 +21,34 @@ type Me = { authenticated: boolean; setupRequired: boolean };
 
 const CODES = Array.from({ length: 8 }, (_, i) => `aaaa-bbbb-cccc-${String(1000 + i)}`);
 
+/**
+ * Los ajustes tal como los devuelve `GET /api/settings`: siempre completos (con `notifications`). Una respuesta a
+ * medias hacía fallar al azar la pantalla de Ajustes cuando llegaba mientras el test seguía comprobando.
+ */
+function completeSettings(): Settings {
+  return {
+    displayName: "Victor",
+    theme: "blue",
+    timezone: "Europe/Madrid",
+    weeklyGoal: 3,
+    stepsGoal: 8000,
+    creatineGrams: 5,
+    shortcutName: "Gymvik Pasos",
+    notifications: {
+      today: { enabled: true, time: "09:00" },
+      creatine: { enabled: true, time: "10:00" },
+      steps: { enabled: true, time: "20:00" },
+      streak: { enabled: false, time: "19:00" },
+      weight: { enabled: true, time: "09:00" },
+    },
+  };
+}
+
 const server = {
   me: { authenticated: false, setupRequired: false } as Me,
   /** "hang": la petición no responde ni falla hasta que se aborta, como una señal que no llega. */
   meFails: null as "offline" | "hang" | 500 | 401 | 403 | null,
-  settings: { theme: "blue" } as Partial<Settings>,
+  settings: completeSettings(),
 };
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -61,6 +84,16 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   return json(404, { error: "No encontrado" });
 }
 
+/**
+ * Avisa de cuándo la app se suscribe a `type` en `target`. Los efectos de React (donde la app se suscribe) corren
+ * después de que el DOM ya cambió, así que un test que lanza el evento nada más ver la pantalla puede adelantarse a la
+ * suscripción y el evento se pierde. Hay que llamarla antes de pintar; devuelve la espera.
+ */
+function whenSubscribed(target: EventTarget, type: string): () => Promise<void> {
+  const added = vi.spyOn(target, "addEventListener");
+  return () => waitFor(() => expect(added.mock.calls.some(([name]) => name === type)).toBe(true));
+}
+
 function renderAt(entry: string) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
@@ -72,7 +105,7 @@ function renderAt(entry: string) {
 beforeEach(() => {
   server.me = { authenticated: false, setupRequired: false };
   server.meFails = null;
-  server.settings = { theme: "blue" };
+  server.settings = completeSettings();
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
   vi.stubGlobal("fetch", fetchMock);
@@ -84,6 +117,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -168,9 +202,11 @@ describe("primer arranque y acceso", () => {
   });
 
   it("tras un error del servidor, al volver la red comprueba de verdad la sesión y lleva a /login si no vale", async () => {
+    const subscribed = whenSubscribed(window, "online");
     server.meFails = 500;
     renderAt("/");
     await screen.findByRole("heading", { name: "Hoy" });
+    await subscribed();
 
     server.meFails = null;
     server.me = { authenticated: false, setupRequired: false };
@@ -180,9 +216,11 @@ describe("primer arranque y acceso", () => {
   });
 
   it("tras un error del servidor, al volver a la app desde segundo plano también la comprueba", async () => {
+    const subscribed = whenSubscribed(document, "visibilitychange");
     server.meFails = 500;
     renderAt("/");
     await screen.findByRole("heading", { name: "Hoy" });
+    await subscribed();
 
     server.meFails = null;
     server.me = { authenticated: false, setupRequired: false };
