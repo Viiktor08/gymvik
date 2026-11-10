@@ -435,6 +435,12 @@ a {
   flex: none;
 }
 
+/* Algo que no salió bien y sigue pendiente: mismo aviso, con el color de error. */
+.banner-warning {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
 /* --- Tarjetas --- */
 
 .card {

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, api } from "./api";
+import { ApiError, apiWithin } from "./api";
 import { passkeyErrorMessage } from "./webauthn";
 
 type Me = { authenticated: boolean; setupRequired: boolean };
@@ -24,22 +24,27 @@ export function useAuth(): AuthContextValue {
   return value;
 }
 
+/** Con poca señal `/me` puede no responder ni fallar: pasado esto se da por perdido y se trata como sin red. */
+const ME_TIMEOUT_MS = 5000;
+
 /**
- * Estado de acceso de la app, según `GET /api/auth/me`. Sin red no se puede
- * saber si la sesión sigue viva; se deja entrar igualmente, porque un entreno
- * en curso tiene que poder abrirse sin cobertura. Si la sesión no valía, la
- * primera petición a la API devuelve 401 y `api()` lleva a /login. Al volver
- * la red se comprueba de verdad.
+ * Estado de acceso de la app, según `GET /api/auth/me`. Si no se puede saber si la sesión sigue viva (sin red,
+ * sin respuesta en 5 s o con un error del servidor) se deja entrar igualmente, porque un entreno en curso tiene
+ * que poder abrirse sin cobertura y un servidor enfermo no puede dejar la app inaccesible. Si la sesión no valía,
+ * la primera petición a la API devuelve 401 y `api()` lleva a /login. Al volver la red, o a la app desde segundo
+ * plano, se comprueba de verdad. Un 401 de `/me` lleva a /login; cualquier otro error del cliente se enseña.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
   const refresh = useCallback(async () => {
     try {
-      const me = await api<Me>("/api/auth/me");
+      const me = await apiWithin<Me>("/api/auth/me", ME_TIMEOUT_MS);
       setState({ status: "ready", offline: false, ...me });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 0) {
+      if (error instanceof ApiError && error.status === 401) {
+        setState({ status: "ready", offline: false, authenticated: false, setupRequired: false });
+      } else if (error instanceof ApiError && (error.status === 0 || error.status >= 500)) {
         setState((previous) =>
           previous.status === "ready"
             ? previous
@@ -59,8 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!assumedOnline) return;
     const check = () => void refresh();
+    const onVisible = () => {
+      if (!document.hidden) check();
+    };
     window.addEventListener("online", check);
-    return () => window.removeEventListener("online", check);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", check);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [assumedOnline, refresh]);
 
   const value = useMemo(() => ({ state, refresh }), [state, refresh]);

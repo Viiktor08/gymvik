@@ -7,6 +7,14 @@ import { SessionSummary, type Finished } from "../session/SessionSummary";
 import { beginSession, type StartOutcome } from "../session/startSession";
 import { failureMessage } from "../useLoad";
 
+const startFormat = new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+
+/** "martes 10 de noviembre, 08:05" a partir del instante en que empezó el entreno. */
+function formatStart(startedAt: string): string {
+  const instant = new Date(startedAt);
+  return Number.isNaN(instant.getTime()) ? "un día anterior" : startFormat.format(instant);
+}
+
 type State =
   | { status: "loading" }
   | { status: "error"; message: string; offline: boolean }
@@ -104,19 +112,49 @@ export function Session() {
   }
 
   if (outcome.kind === "ask") {
+    const continueButton = (label: string) => (
+      <button type="button" className="button button-primary" onClick={() => navigate("/entreno/sesion", { replace: true })}>
+        {label}
+      </button>
+    );
+
+    if (outcome.reason === "stale") {
+      return (
+        <section className="screen stack">
+          <h1>Tienes un entreno sin terminar</h1>
+          <p className="muted">
+            Lo empezaste el {formatStart(outcome.startedAt)}. Si lo continúas, se guardará con esa fecha y esa duración; si
+            empiezas de nuevo, se descarta y se pierden sus series.
+          </p>
+          <div className="actions">
+            {continueButton("Continuar")}
+            {outcome.routineName === null ? null : (
+              <button type="button" className="button button-danger" onClick={() => setReplaceFor(routineId)}>
+                Empezar de nuevo
+              </button>
+            )}
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className="screen stack">
         <h1>Ya tienes un entreno en curso</h1>
-        <p className="muted">
-          Si empiezas {outcome.routineName}, el entreno en curso se descarta y se pierden sus series.
-        </p>
+        {outcome.routineName === null ? (
+          <p className="muted">Ahora no se puede cargar la otra rutina. Puedes seguir con el entreno en curso.</p>
+        ) : (
+          <p className="muted">
+            Si empiezas {outcome.routineName}, el entreno en curso se descarta y se pierden sus series.
+          </p>
+        )}
         <div className="actions">
-          <button type="button" className="button button-primary" onClick={() => navigate("/entreno/sesion", { replace: true })}>
-            Continuar el entreno en curso
-          </button>
-          <button type="button" className="button button-danger" onClick={() => setReplaceFor(routineId)}>
-            {`Empezar ${outcome.routineName} y descartar el anterior`}
-          </button>
+          {continueButton("Continuar el entreno en curso")}
+          {outcome.routineName === null ? null : (
+            <button type="button" className="button button-danger" onClick={() => setReplaceFor(routineId)}>
+              {`Empezar ${outcome.routineName} y descartar el anterior`}
+            </button>
+          )}
         </div>
       </section>
     );

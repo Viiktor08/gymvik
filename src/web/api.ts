@@ -59,3 +59,21 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const text = await response.text();
   return (text === "" ? undefined : JSON.parse(text)) as T;
 }
+
+/**
+ * Como `api`, pero la petición se aborta pasado `timeoutMs`, y eso cuenta como "sin conexión" (`ApiError` con
+ * estado 0). Con poca señal una petición puede no fallar nunca; esto evita que una pantalla se quede esperando.
+ */
+export async function apiWithin<T>(path: string, timeoutMs: number, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await api<T>(path, { ...init, signal: controller.signal });
+  } catch (failure) {
+    // Cortar a media lectura del cuerpo lanza un AbortError que no es de la API: también es "sin red".
+    if (controller.signal.aborted) throw new ApiError(0, "Sin conexión");
+    throw failure;
+  } finally {
+    clearTimeout(timer);
+  }
+}

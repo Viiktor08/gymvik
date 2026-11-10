@@ -1,5 +1,5 @@
 import type { Exercise, Routine, SetEntry } from "../../shared/types";
-import { ApiError, api } from "../api";
+import { ApiError, api, apiWithin } from "../api";
 import type { ExerciseHistoryEntry } from "../progressData";
 import { lastFromHistory } from "./lastTime";
 import { loadSnapshot, type Snapshot } from "./offlineCache";
@@ -15,28 +15,22 @@ export type Cached<T> = { data: T; fromCache: boolean };
 type Options = {
   /** Si la red no ha contestado en este tiempo se da por perdida. Sin él, se espera lo que tarde el navegador. */
   timeoutMs?: number;
+  /**
+   * Cae a la instantánea con cualquier fallo, no solo sin red (un 5xx, por ejemplo). Para cuando hay algo del
+   * usuario que no puede quedarse bloqueado por un servidor enfermo, como un entreno ya empezado.
+   */
+  anyFailure?: boolean;
 };
 
-async function call<T>(path: string, timeoutMs: number | undefined): Promise<T> {
-  if (timeoutMs === undefined) return api<T>(path);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await api<T>(path, { signal: controller.signal });
-  } catch (failure) {
-    // Cortar a media lectura del cuerpo lanza un AbortError que no es de la API: también es "sin red".
-    if (controller.signal.aborted) throw new ApiError(0, "Sin conexión");
-    throw failure;
-  } finally {
-    clearTimeout(timer);
-  }
+function call<T>(path: string, timeoutMs: number | undefined): Promise<T> {
+  return timeoutMs === undefined ? api<T>(path) : apiWithin<T>(path, timeoutMs);
 }
 
 async function withSnapshot<T>(path: string, options: Options, pick: (snapshot: Snapshot) => T): Promise<Cached<T>> {
   try {
     return { data: await call<T>(path, options.timeoutMs), fromCache: false };
   } catch (failure) {
-    if (failure instanceof ApiError && failure.status === 0) {
+    if (options.anyFailure || (failure instanceof ApiError && failure.status === 0)) {
       const snapshot = await loadSnapshot();
       if (snapshot) return { data: pick(snapshot), fromCache: true };
     }

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Exercise, Routine, SetEntry } from "../../src/shared/types";
 import { Session } from "../../src/web/screens/Session";
 import { clearDraft, loadDraft, saveDraft, type Draft } from "../../src/web/session/draftStore";
-import { isQueued, pendingCount } from "../../src/web/session/outbox";
+import { isQueued, listRejected, pendingCount, rejectedCount } from "../../src/web/session/outbox";
 import { saveSnapshot } from "../../src/web/session/offlineCache";
 import { syncOutbox } from "../../src/web/session/sync";
 
@@ -67,6 +67,8 @@ const server = {
   } as Record<string, unknown[]>,
   /** Sin red: toda petición falla como un fetch sin cobertura. */
   offline: false,
+  /** Un error del servidor (p. ej. 500) en rutinas y ejercicios; el historial sigue respondiendo. */
+  catalogStatus: null as number | null,
   putStatus: 200,
   applyStatus: 200,
   newRecords: [] as unknown[],
@@ -86,6 +88,8 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
   server.calls.push({ method, path, body });
 
+  const isCatalog = path === "/api/routines" || path === "/api/exercises" || path === "/api/exercises?archived=1";
+  if (isCatalog && server.catalogStatus !== null) return json(server.catalogStatus, { error: "Error interno" });
   if (path === "/api/routines") return json(200, server.routines);
   if (path === "/api/exercises?archived=1") return json(200, server.exercises);
   if (path === "/api/exercises") return json(200, server.exercises.filter((e) => !e.archived));
@@ -163,13 +167,14 @@ function dialog(name: string): HTMLElement {
   return screen.getByRole("dialog", { name });
 }
 
-const NOW = Date.parse("2026-11-10T10:00:00.000Z");
+const HOUR = 3_600_000;
 
+/** Un borrador empezado hace 20 minutos (salvo que se diga otra cosa): reciente, no olvidado. */
 function draftOf(overrides: Partial<Draft> = {}): Draft {
   return {
     id: "w-draft",
     routineId: "r-pecho",
-    startedAt: new Date(NOW - 20 * 60_000).toISOString(),
+    startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
     exercises: [
       {
         exerciseId: "e-press",
@@ -187,6 +192,7 @@ beforeEach(() => {
   server.routines = [PECHO, ESPALDA, CARDIO];
   server.exercises = EXERCISES;
   server.offline = false;
+  server.catalogStatus = null;
   server.putStatus = 200;
   server.applyStatus = 200;
   server.newRecords = [];
@@ -1053,5 +1059,206 @@ describe("estado entre sesiones", () => {
     expect(screen.getByText("Cargando entreno…")).toBeTruthy();
     await cardAppears("Press banca");
     await act(async () => {});
+  });
+});
+
+describe("abrir el borrador aunque no se puedan cargar las rutinas", () => {
+  const SNAPSHOT = {
+    savedAt: "2026-11-09T10:00:00.000Z",
+    routines: [PECHO, ESPALDA, CARDIO],
+    exercises: EXERCISES,
+    last: { "e-press": [set(60, 10), set(60, 9), set(57.5, 8)] },
+  };
+
+  it("con un error del servidor y una copia guardada, abre el borrador con la copia", async () => {
+    await saveSnapshot(SNAPSHOT);
+    await saveDraft(draftOf());
+    server.catalogStatus = 500;
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Press banca");
+    expect(field("Press banca", "Peso, serie 1").value).toBe("61");
+    expect(within(card("Press banca")).getByText("Última vez: 60×10 · 60×9 · 57,5×8")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status").textContent).toMatch(/Sin conexión con el servidor/);
+  });
+
+  it("con un error del servidor y sin copia, abre el borrador con nombres genéricos y lo avisa", async () => {
+    await saveDraft(draftOf());
+    server.catalogStatus = 500;
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Ejercicio 1");
+    expect(card("Ejercicio 2")).toBeTruthy();
+    expect(field("Ejercicio 1", "Peso, serie 1").value).toBe("61");
+    expect(screen.getByText(/No se han podido cargar los nombres de los ejercicios/)).toBeTruthy();
+    expect(screen.queryByText(/Todavía no hay datos guardados/)).toBeNull();
+
+    // Se puede seguir entrenando: lo que se marca se guarda en el borrador.
+    mark("Ejercicio 2", 1);
+    await waitFor(async () => expect((await savedDraft()).exercises[1]?.sets[0]?.done).toBe(true));
+  });
+
+  it("sin red y sin copia también abre el borrador, en vez de decir que no hay datos", async () => {
+    await saveDraft(draftOf());
+    server.offline = true;
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Ejercicio 1");
+    expect(screen.queryByText(/Todavía no hay datos guardados/)).toBeNull();
+  });
+
+  it("un borrador de cardio sin catálogo sigue enseñando minutos y distancia", async () => {
+    await saveDraft(
+      draftOf({
+        routineId: "r-cardio",
+        exercises: [{ exerciseId: "e-correr", restSeconds: 0, sets: [{ ...set(null, null, { durationMin: 30, distanceKm: 5 }), done: false }] }],
+      }),
+    );
+    server.catalogStatus = 500;
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Ejercicio 1");
+    expect(field("Ejercicio 1", "Minutos, serie 1").value).toBe("30");
+    expect(field("Ejercicio 1", "Distancia (km), serie 1").value).toBe("5");
+  });
+
+  it("sin borrador, un error del servidor sigue siendo un error con Reintentar", async () => {
+    await saveSnapshot(SNAPSHOT);
+    server.catalogStatus = 500;
+
+    renderSession();
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
+  });
+
+  it("si se pide otra rutina y no se pueden cargar las rutinas, solo ofrece continuar", async () => {
+    await saveDraft(draftOf());
+    server.catalogStatus = 500;
+
+    renderSession("/entreno/sesion?rutina=r-espalda");
+
+    expect(await screen.findByText("Ya tienes un entreno en curso")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continuar el entreno en curso" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Empezar / })).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+});
+
+describe("un borrador olvidado de la misma rutina", () => {
+  const stale = () => draftOf({ startedAt: new Date(Date.now() - 13 * HOUR).toISOString() });
+
+  it("pregunta antes de mezclarlo con el entreno de hoy, y no lo toca mientras tanto", async () => {
+    await saveDraft(stale());
+
+    renderSession("/entreno/sesion?rutina=r-pecho");
+
+    expect(await screen.findByText("Tienes un entreno sin terminar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Empezar de nuevo" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Press banca" })).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("Continuar sigue con el borrador viejo y quita la rutina de la dirección", async () => {
+    await saveDraft(stale());
+    renderSession("/entreno/sesion?rutina=r-pecho");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continuar" }));
+
+    await cardAppears("Press banca");
+    expect(screen.getByTestId("where").textContent).toBe("/entreno/sesion");
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("Empezar de nuevo descarta el viejo y empieza uno con la hora de ahora", async () => {
+    await saveDraft(stale());
+    renderSession("/entreno/sesion?rutina=r-pecho");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar de nuevo" }));
+
+    await cardAppears("Press banca");
+    await waitFor(async () => {
+      const draft = await savedDraft();
+      expect(draft.id).not.toBe("w-draft");
+      expect(draft.routineId).toBe("r-pecho");
+      expect(Date.now() - Date.parse(draft.startedAt)).toBeLessThan(60_000);
+    });
+    // Las series del borrador viejo no pasan al nuevo: salen prerrellenadas con la última vez.
+    expect(field("Press banca", "Peso, serie 1").value).toBe("60");
+  });
+
+  it("con menos de 12 horas lo continúa sin preguntar", async () => {
+    await saveDraft(draftOf({ startedAt: new Date(Date.now() - 11 * HOUR).toISOString() }));
+
+    renderSession("/entreno/sesion?rutina=r-pecho");
+
+    await cardAppears("Press banca");
+    expect(screen.queryByText("Tienes un entreno sin terminar")).toBeNull();
+  });
+
+  it("el aviso de Hoy (sin rutina en la dirección) continúa aunque sea viejo, sin preguntar", async () => {
+    await saveDraft(stale());
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Press banca");
+    expect(screen.queryByText("Tienes un entreno sin terminar")).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("un borrador viejo de entreno libre y una rutina pedida sigue preguntando lo de siempre", async () => {
+    await saveDraft(draftOf({ routineId: null, startedAt: new Date(Date.now() - 30 * HOUR).toISOString() }));
+
+    renderSession("/entreno/sesion?rutina=r-pecho");
+
+    expect(await screen.findByText("Ya tienes un entreno en curso")).toBeTruthy();
+  });
+});
+
+describe("un entreno que el servidor rechaza", () => {
+  it("no desaparece: el resumen dice que no se ha guardado y que sigue en el móvil", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    server.putStatus = 400;
+    renderSession();
+    await cardAppears("Press banca");
+    mark("Press banca", 1);
+    open("Terminar");
+
+    fireEvent.click(within(dialog("Terminar entreno")).getByRole("button", { name: "Guardar entreno" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("No se ha podido guardar este entreno; sigue guardado en este móvil.");
+    expect(screen.queryByRole("heading", { name: "Entreno terminado" })).toBeNull();
+    expect(screen.queryByText("Récords pendientes de sincronizar")).toBeNull();
+    expect(screen.queryByText(/Se enviará solo cuando vuelva la conexión/)).toBeNull();
+    // El entreno no se ha perdido: está aparte, con su respuesta, esperando que se reintente.
+    expect(await pendingCount()).toBe(0);
+    expect(await rejectedCount()).toBe(1);
+    const [rejected] = await listRejected();
+    expect(rejected?.status).toBe(400);
+    expect(rejected?.item).toMatchObject({ kind: "workout", workout: { source: "live", routineId: "r-pecho" } });
+    expect(await loadDraft()).toBeNull();
+    warn.mockRestore();
+  });
+
+  it("aun así enseña los números del entreno, calculados en el móvil", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    server.putStatus = 422;
+    renderSession();
+    await cardAppears("Press banca");
+    mark("Press banca", 1);
+    open("Terminar");
+    fireEvent.click(within(dialog("Terminar entreno")).getByRole("button", { name: "Guardar entreno" }));
+
+    await screen.findByRole("alert");
+    expect(within(screen.getByRole("region", { name: "Resumen" })).getByText("600 kg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Listo" })).toBeTruthy();
+    warn.mockRestore();
   });
 });

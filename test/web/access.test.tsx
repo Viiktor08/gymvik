@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "../../src/shared/types";
@@ -23,7 +23,8 @@ const CODES = Array.from({ length: 8 }, (_, i) => `aaaa-bbbb-cccc-${String(1000 
 
 const server = {
   me: { authenticated: false, setupRequired: false } as Me,
-  meFails: null as "offline" | 500 | null,
+  /** "hang": la petición no responde ni falla hasta que se aborta, como una señal que no llega. */
+  meFails: null as "offline" | "hang" | 500 | 401 | 403 | null,
   settings: { theme: "blue" } as Partial<Settings>,
 };
 
@@ -42,7 +43,12 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const method = init?.method ?? "GET";
   if (path === "/api/auth/me") {
     if (server.meFails === "offline") throw new TypeError("Failed to fetch");
-    if (server.meFails === 500) return json(500, { error: "Error interno" });
+    if (server.meFails === "hang") {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Abortado", "AbortError")));
+      });
+    }
+    if (typeof server.meFails === "number") return json(server.meFails, { error: "Error simulado" });
     return json(200, server.me);
   }
   if (path === "/api/settings") return json(200, server.settings);
@@ -148,8 +154,52 @@ describe("primer arranque y acceso", () => {
     expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
   });
 
-  it("si el servidor falla enseña el error y permite reintentar", async () => {
+  it("con un error del servidor en /me deja entrar igualmente: no bloquea la app, ni la sesión en directo", async () => {
     server.meFails = 500;
+    renderAt("/");
+    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Principal" })).toBeTruthy();
+  });
+
+  it("con un error del servidor, también se puede abrir la sesión directamente", async () => {
+    server.meFails = 500;
+    renderAt("/entreno/sesion");
+    expect(await screen.findByRole("heading", { name: "Entreno en curso" })).toBeTruthy();
+  });
+
+  it("tras un error del servidor, al volver la red comprueba de verdad la sesión y lleva a /login si no vale", async () => {
+    server.meFails = 500;
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Hoy" });
+
+    server.meFails = null;
+    server.me = { authenticated: false, setupRequired: false };
+    window.dispatchEvent(new Event("online"));
+
+    expect(await screen.findByRole("button", { name: "Entrar con passkey" })).toBeTruthy();
+  });
+
+  it("tras un error del servidor, al volver a la app desde segundo plano también la comprueba", async () => {
+    server.meFails = 500;
+    renderAt("/");
+    await screen.findByRole("heading", { name: "Hoy" });
+
+    server.meFails = null;
+    server.me = { authenticated: false, setupRequired: false };
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(await screen.findByRole("button", { name: "Entrar con passkey" })).toBeTruthy();
+  });
+
+  it("un 401 de /me sí lleva a /login", async () => {
+    server.meFails = 401;
+    renderAt("/");
+    expect(await screen.findByRole("button", { name: "Entrar con passkey" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Principal" })).toBeNull();
+  });
+
+  it("otro error del cliente (403) sigue enseñando el error con Reintentar", async () => {
+    server.meFails = 403;
     renderAt("/");
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Principal" })).toBeNull();
@@ -158,6 +208,47 @@ describe("primer arranque y acceso", () => {
     signIn();
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+  });
+
+  describe("si /me no responde ni falla", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("a los 5 s se aborta y deja entrar, como sin red; antes, sigue la pantalla de carga", async () => {
+      // Solo se falsean los temporizadores; el tiempo avanza solo para que Testing Library siga sondeando.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+      server.meFails = "hang";
+      renderAt("/");
+
+      expect(screen.getByText("Cargando…")).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_500);
+      });
+      expect(screen.getByText("Cargando…")).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+      expect(screen.getByRole("navigation", { name: "Principal" })).toBeTruthy();
+    });
+
+    it("una vez dentro, al volver la red comprueba la sesión", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+      server.meFails = "hang";
+      renderAt("/");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_500);
+      });
+      await screen.findByRole("heading", { name: "Hoy" });
+
+      server.meFails = null;
+      server.me = { authenticated: false, setupRequired: false };
+      window.dispatchEvent(new Event("online"));
+
+      expect(await screen.findByRole("button", { name: "Entrar con passkey" })).toBeTruthy();
+    });
   });
 });
 

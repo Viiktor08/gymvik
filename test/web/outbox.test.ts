@@ -2,12 +2,18 @@ import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workout } from "../../src/shared/types";
+import { openDB } from "idb";
 import {
   enqueue,
   enqueueApply,
   flushOutbox,
   isQueued,
+  isRejected,
+  listRejected,
+  onOutboxChange,
   pendingCount,
+  rejectedCount,
+  retryRejected,
   type OutboxItem,
   type SendResult,
 } from "../../src/web/session/outbox";
@@ -89,12 +95,20 @@ describe("flushOutbox", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it.each([400, 404, 409, 413, 422])("con un %i lo quita y lo deja dicho en la consola", async (status) => {
+  it.each([400, 404, 409, 413, 422])("con un %i no lo borra: lo aparta en 'rechazados' y lo deja dicho en la consola", async (status) => {
     await enqueue(workout("w-1"));
 
     expect(await flushOutbox(sender(status).send)).toBe(1);
 
     expect(await pendingCount()).toBe(0);
+    expect(await isQueued("w-1")).toBe(false);
+    expect(await rejectedCount()).toBe(1);
+    expect(await isRejected("w-1")).toBe(true);
+    const rejected = await listRejected();
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.status).toBe(status);
+    expect(rejected[0]?.item).toEqual({ kind: "workout", workout: workout("w-1") });
+    expect(Number.isNaN(Date.parse(rejected[0]?.rejectedAt ?? ""))).toBe(false);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain(String(status));
   });
@@ -105,6 +119,7 @@ describe("flushOutbox", () => {
     await flushOutbox(sender(204).send);
 
     expect(await pendingCount()).toBe(0);
+    expect(await rejectedCount()).toBe(0);
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -156,7 +171,7 @@ describe("flushOutbox", () => {
     expect(await pendingCount()).toBe(2);
   });
 
-  it("si el servidor rechaza el entreno con un 400, el 'guardar en la rutina' se intenta y se quita con su 404", async () => {
+  it("si el servidor rechaza el entreno con un 400, el 'guardar en la rutina' se intenta y también se aparta (con su 404)", async () => {
     await enqueue(workout("w-1"));
     await enqueueApply("w-1", [{ exerciseId: "e-press", sets: 4 }]);
     const { send, sent } = sender(400, 404);
@@ -165,6 +180,9 @@ describe("flushOutbox", () => {
 
     expect(sent).toHaveLength(2);
     expect(await pendingCount()).toBe(0);
+    // Dos elementos apartados, pero un solo entreno rechazado.
+    expect((await listRejected()).map((entry) => entry.item.kind)).toEqual(["workout", "apply"]);
+    expect(await rejectedCount()).toBe(1);
     expect(warn).toHaveBeenCalledTimes(2);
   });
 
@@ -243,5 +261,97 @@ describe("enqueue", () => {
     expect(await pendingCount()).toBe(1);
     expect(await isQueued("w-1")).toBe(true);
     expect(await isQueued("otro")).toBe(false);
+  });
+});
+
+describe("rechazados", () => {
+  async function reject(...ids: string[]) {
+    for (const id of ids) await enqueue(workout(id));
+    await flushOutbox(sender(400).send);
+  }
+
+  it("rejectedCount cuenta entrenos, no elementos", async () => {
+    await enqueue(workout("w-1"));
+    await enqueueApply("w-1", [{ exerciseId: "e-press", sets: 4 }]);
+    await enqueue(workout("w-2"));
+    await flushOutbox(sender(400).send);
+
+    expect(await listRejected()).toHaveLength(3);
+    expect(await rejectedCount()).toBe(2);
+  });
+
+  it("retryRejected devuelve los elementos a la cola, en su orden, y la cola los vuelve a enviar", async () => {
+    await enqueue(workout("w-1"));
+    await enqueueApply("w-1", [{ exerciseId: "e-press", sets: 4 }]);
+    await flushOutbox(sender(400, 404).send);
+
+    expect(await retryRejected()).toBe(2);
+
+    expect(await rejectedCount()).toBe(0);
+    expect(await pendingCount()).toBe(2);
+    const { send, sent } = sender(200);
+    expect(await flushOutbox(send)).toBe(2);
+    expect(sent.map((item) => item.kind)).toEqual(["workout", "apply"]);
+    expect(await rejectedCount()).toBe(0);
+  });
+
+  it("si el servidor lo vuelve a rechazar, vuelve a 'rechazados' y no se pierde", async () => {
+    await reject("w-1");
+    await retryRejected();
+
+    await flushOutbox(sender(400).send);
+
+    expect(await pendingCount()).toBe(0);
+    expect(await isRejected("w-1")).toBe(true);
+    expect((await listRejected())[0]?.item).toEqual({ kind: "workout", workout: workout("w-1") });
+  });
+
+  it("sin rechazados, retryRejected devuelve 0", async () => {
+    expect(await retryRejected()).toBe(0);
+    expect(await rejectedCount()).toBe(0);
+    expect(await isRejected("nada")).toBe(false);
+  });
+
+  it("reintentar un entreno que ya está en la cola no lo duplica", async () => {
+    await reject("w-1");
+    await enqueue(workout("w-1"));
+
+    await retryRejected();
+
+    expect(await pendingCount()).toBe(1);
+  });
+
+  it("avisa a quien escucha cuando la cola cambia: tras un envío y tras reintentar", async () => {
+    const listener = vi.fn();
+    const stop = onOutboxChange(listener);
+    await enqueue(workout("w-1"));
+
+    await flushOutbox(sender(400).send);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await retryRejected();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    stop();
+    await flushOutbox(sender(200).send);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("una base de la versión anterior", () => {
+  it("al abrirla conserva lo que estaba en la cola y añade 'rechazados'", async () => {
+    // La versión 1 solo tenía la cola.
+    const old = await openDB("gymvik-outbox", 1, {
+      upgrade(db) {
+        db.createObjectStore("outbox", { autoIncrement: true });
+      },
+    });
+    await old.add("outbox", { kind: "workout", workout: workout("w-viejo") });
+    old.close();
+
+    expect(await isQueued("w-viejo")).toBe(true);
+    expect(await rejectedCount()).toBe(0);
+    await flushOutbox(sender(400).send);
+    expect(await isRejected("w-viejo")).toBe(true);
   });
 });

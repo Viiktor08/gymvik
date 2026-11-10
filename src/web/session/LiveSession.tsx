@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatLast } from "../../shared/prefill";
 import { hasStructuralChanges, NEW_REST_SECONDS } from "../../shared/routineDiff";
-import type { Exercise } from "../../shared/types";
+import type { Category, Exercise } from "../../shared/types";
 import { ExercisePicker } from "../components/ExercisePicker";
 import { MoreIcon, PlusIcon } from "../components/icons";
 import { Sheet } from "../components/Sheet";
@@ -25,7 +25,7 @@ import { buildWorkout, countDoneSets, groupRecords, sessionTotals, structureOf }
 import { FinishSheet } from "./FinishSheet";
 import { refreshSnapshot } from "./offlineCache";
 import { loadLast } from "./offlineData";
-import { enqueue, enqueueApply, isQueued } from "./outbox";
+import { enqueue, enqueueApply, isQueued, isRejected } from "./outbox";
 import { playBeep } from "./beep";
 import { RestBar } from "./RestBar";
 import type { Finished } from "./SessionSummary";
@@ -49,6 +49,19 @@ const LAST_TIMEOUT_MS = 3000;
 
 function deviceTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+/** El nombre del ejercicio; si no se sabe (sin catálogo), "Ejercicio 2" para poder distinguirlos. */
+function exerciseName(info: Exercise | undefined, index: number): string {
+  return info?.name ?? `Ejercicio ${index + 1}`;
+}
+
+/** Sin catálogo no se sabe si es cardio; las filas lo dicen: minutos o distancia y ni peso ni repeticiones. */
+function guessCategory(exercise: Draft["exercises"][number]): Category {
+  const cardio = exercise.sets.length > 0 && exercise.sets.every(
+    (set) => set.weightKg === null && set.reps === null && (set.durationMin !== null || set.distanceKm !== null),
+  );
+  return cardio ? "cardio" : "strength";
 }
 
 /** Claves estables de las tarjetas: el id del ejercicio y su aparición (puede repetirse en una sesión). */
@@ -170,6 +183,7 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
       }
       const result = takeWorkoutResult(workout.id);
       const pending = await isQueued(workout.id).catch(() => true);
+      const rejected = await isRejected(workout.id).catch(() => false);
       // Lo que se acaba de enviar cambia la "última vez" de la copia sin conexión.
       if (sent > 0) void refreshSnapshot().catch(() => undefined);
 
@@ -180,6 +194,7 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
         notes: workout.notes,
         records: result ? groupRecords(result.newRecords, names) : null,
         pending,
+        rejected,
       });
     } catch {
       setFinishError("No se pudo guardar el entreno en este móvil. Inténtalo de nuevo.");
@@ -221,9 +236,14 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
         </div>
       </header>
 
-      {context.fromCache ? (
+      {context.fromCache && !context.catalogMissing ? (
         <p role="status" className="notice">
-          Sin conexión: se usan las rutinas y la última vez guardadas en este móvil.
+          Sin conexión con el servidor: se usan las rutinas y la última vez guardadas en este móvil.
+        </p>
+      ) : null}
+      {context.catalogMissing ? (
+        <p role="status" className="notice">
+          No se han podido cargar los nombres de los ejercicios. Tus series se guardan igualmente.
         </p>
       ) : null}
       {saveFailed ? (
@@ -236,13 +256,13 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
       <div className="session-cards">
         {draft.exercises.map((exercise, index) => {
           const info = catalog.get(exercise.exerciseId);
-          const category = info?.category ?? "strength";
+          const category = info?.category ?? guessCategory(exercise);
           const last = lasts[exercise.exerciseId];
           return (
             <ExerciseCard
               key={keys[index]}
               exercise={exercise}
-              name={info?.name ?? "Ejercicio"}
+              name={exerciseName(info, index)}
               category={category}
               lastText={last ? formatLast(last, category) : ""}
               onField={(set, field: SetField, value) => change((current) => setField(current, index, set, field, value))}
@@ -261,7 +281,7 @@ export function LiveSession({ initial, context, onFinished, onDiscarded }: Props
       {rest.remaining === null ? null : <RestBar remaining={rest.remaining} onAdd={() => rest.add(15)} onSkip={rest.skip} />}
 
       <ExerciseMenu
-        title={catalog.get(menuExercise?.exerciseId ?? "")?.name ?? "Ejercicio"}
+        title={menu === null ? "Ejercicio" : exerciseName(catalog.get(menuExercise?.exerciseId ?? ""), menu)}
         position={menu === null || !menuExercise ? null : { index: menu, count: draft.exercises.length, sets: menuExercise.sets.length }}
         onAddSet={() => menu !== null && change((current) => addSet(current, menu))}
         onRemoveSet={() => menu !== null && change((current) => removeLastSet(current, menu))}

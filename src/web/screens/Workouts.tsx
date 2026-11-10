@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Routine } from "../../shared/types";
-import { api } from "../api";
+import { api, apiWithin } from "../api";
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon } from "../components/icons";
 import { LoadError } from "../components/LoadError";
 import { LOAD_TIMEOUT_MS, loadRoutines } from "../session/offlineData";
@@ -19,14 +19,8 @@ type Loaded = {
 /** Qué rutina toca según el servidor; `null` si no hay ninguna o si Hoy no responde (entonces no se marca ninguna). */
 async function fetchNextId(): Promise<string | null> {
   // Es solo un adorno de la lista: con poca señal no puede retrasar las rutinas.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
-  try {
-    const today = await api<TodayData>("/api/today", { signal: controller.signal }).catch(() => null);
-    return today?.next?.routine.id ?? null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const today = await apiWithin<TodayData>("/api/today", LOAD_TIMEOUT_MS).catch(() => null);
+  return today?.next?.routine.id ?? null;
 }
 
 async function fetchLoaded(): Promise<Loaded> {

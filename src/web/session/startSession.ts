@@ -1,7 +1,10 @@
 import type { Exercise, Routine, SetEntry } from "../../shared/types";
 import { draftFromRoutine } from "./draftOps";
 import { loadDraft, type Draft } from "./draftStore";
-import { LOAD_TIMEOUT_MS, loadExercises, loadLast, loadRoutines } from "./offlineData";
+import { LOAD_TIMEOUT_MS, loadExercises, loadLast, loadRoutines, type Cached } from "./offlineData";
+
+/** Un borrador más viejo que esto es un entreno olvidado, no el de hoy: al pedir su rutina se pregunta qué hacer. */
+export const STALE_DRAFT_MS = 12 * 3_600_000;
 
 export type SessionContext = {
   routines: Routine[];
@@ -11,13 +14,19 @@ export type SessionContext = {
   lasts: Record<string, SetEntry[] | null>;
   /** Las rutinas y los ejercicios salen de la copia guardada en el móvil, no del servidor. */
   fromCache: boolean;
+  /** No se pudieron cargar los ejercicios ni hay copia: el borrador se abre sin nombres de ejercicio. */
+  catalogMissing: boolean;
 };
 
 export type StartOutcome =
   /** Hay sesión con la que trabajar. Si es nueva, todavía no está guardada: lo hace la pantalla. */
   | { kind: "ready"; draft: Draft; context: SessionContext }
-  /** Hay otro entreno en curso: antes de sustituirlo hay que preguntar. */
-  | { kind: "ask"; routineName: string }
+  /**
+   * Hay un entreno en curso y se ha pedido una rutina: antes de tocarlo hay que preguntar. `other`: es de otra
+   * rutina (o libre); `stale`: es de la misma pero lleva olvidado más de 12 h. `routineName` es `null` si no se
+   * pudo saber (rutinas sin cargar), y entonces no se puede empezar la rutina de nuevo.
+   */
+  | { kind: "ask"; reason: "other" | "stale"; routineName: string | null; startedAt: string }
   | { kind: "missing" };
 
 async function loadLasts(exerciseIds: string[]): Promise<Record<string, SetEntry[] | null>> {
@@ -26,11 +35,24 @@ async function loadLasts(exerciseIds: string[]): Promise<Record<string, SetEntry
   return Object.fromEntries(loaded);
 }
 
+/** Un fallo de la carga solo se tolera si hay un borrador al que no se puede dejar sin abrir. */
+async function tolerate<T>(load: () => Promise<Cached<T[]>>, draftExists: boolean): Promise<Cached<T[]> | null> {
+  try {
+    return await load();
+  } catch (failure) {
+    if (draftExists) return null;
+    throw failure;
+  }
+}
+
 /**
  * Decide con qué sesión se abre la pantalla (spec §5.3):
- * - sin `routineId`: continúa el borrador guardado o, si no hay, un entreno libre;
- * - con `routineId`: si el borrador es de esa misma rutina, lo continúa; si es de otra cosa, pregunta
- *   (salvo `replace`, que ya lo ha aprobado el usuario); si no hay borrador, empieza la rutina.
+ * - sin `routineId` (el aviso de Hoy): continúa el borrador o, si no hay, un entreno libre;
+ * - con `routineId`: si el borrador es de esa misma rutina y es de hoy (menos de 12 h), lo continúa; si es de
+ *   esa rutina pero está olvidado, o es de otra cosa, pregunta (salvo `replace`, que ya lo ha aprobado el
+ *   usuario); si no hay borrador, empieza la rutina.
+ * Un entreno ya empezado no puede quedarse sin abrir por un fallo del servidor ni por no tener copia: con
+ * borrador, cualquier fallo cae a la instantánea y, sin ella, se abre con nombres genéricos.
  * Sin red usa la instantánea local. No guarda nada: eso lo hace la pantalla al montarse, así que montarla
  * dos veces (StrictMode) no deja dos sesiones.
  */
@@ -40,23 +62,42 @@ export async function beginSession(
   now: Date = new Date(),
   newId: () => string = () => crypto.randomUUID(),
 ): Promise<StartOutcome> {
-  const [routines, exercises, saved] = await Promise.all([
-    loadRoutines({ timeoutMs: LOAD_TIMEOUT_MS }),
-    loadExercises({ archived: true, timeoutMs: LOAD_TIMEOUT_MS }),
-    // Sin IndexedDB no hay borrador que continuar: se sigue como si no lo hubiera.
-    loadDraft().catch(() => null),
-  ]);
-  const base = { routines: routines.data, exercises: exercises.data, fromCache: routines.fromCache || exercises.fromCache };
+  // Sin IndexedDB no hay borrador que continuar: se sigue como si no lo hubiera.
+  const saved = await loadDraft().catch(() => null);
   const existing = replace ? null : saved;
+  const draftExists = existing !== null;
 
-  if (existing && (routineId === null || existing.routineId === routineId)) {
-    const lasts = await loadLasts(existing.exercises.map((exercise) => exercise.exerciseId));
-    return { kind: "ready", draft: existing, context: { ...base, lasts } };
+  const [routines, exercises] = await Promise.all([
+    tolerate(() => loadRoutines({ timeoutMs: LOAD_TIMEOUT_MS, anyFailure: draftExists }), draftExists),
+    tolerate(() => loadExercises({ archived: true, timeoutMs: LOAD_TIMEOUT_MS, anyFailure: draftExists }), draftExists),
+  ]);
+  const base = {
+    routines: routines?.data ?? [],
+    exercises: exercises?.data ?? [],
+    fromCache: (routines?.fromCache ?? true) || (exercises?.fromCache ?? true),
+    catalogMissing: exercises === null,
+  };
+
+  const routine = routineId === null ? null : (base.routines.find((candidate) => candidate.id === routineId) ?? null);
+
+  if (existing) {
+    const sameRoutine = existing.routineId === routineId;
+    const stale = now.getTime() - Date.parse(existing.startedAt) > STALE_DRAFT_MS;
+    if (routineId === null || (sameRoutine && !stale)) {
+      const lasts = await loadLasts(existing.exercises.map((exercise) => exercise.exerciseId));
+      return { kind: "ready", draft: existing, context: { ...base, lasts } };
+    }
+    // Una rutina que ya no existe (con las rutinas bien cargadas) no se puede empezar ni preguntar por ella.
+    if (!sameRoutine && !routine && routines !== null) return { kind: "missing" };
+    return {
+      kind: "ask",
+      reason: sameRoutine ? "stale" : "other",
+      routineName: routine?.name ?? null,
+      startedAt: existing.startedAt,
+    };
   }
 
-  const routine = routineId === null ? null : routines.data.find((candidate) => candidate.id === routineId);
   if (routineId !== null && !routine) return { kind: "missing" };
-  if (existing && routine) return { kind: "ask", routineName: routine.name };
 
   if (!routine) {
     const draft: Draft = { id: newId(), routineId: null, startedAt: now.toISOString(), exercises: [] };
@@ -64,6 +105,6 @@ export async function beginSession(
   }
 
   const lasts = await loadLasts(routine.items.map((item) => item.exerciseId));
-  const catalog = new Map(exercises.data.map((exercise) => [exercise.id, exercise]));
+  const catalog = new Map(base.exercises.map((exercise) => [exercise.id, exercise]));
   return { kind: "ready", draft: draftFromRoutine(routine, catalog, lasts, newId(), now), context: { ...base, lasts } };
 }

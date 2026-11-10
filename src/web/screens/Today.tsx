@@ -9,6 +9,8 @@ import { WeekCard } from "../components/WeekCard";
 import { WeightCard } from "../components/WeightCard";
 import { formatLongDate } from "../format";
 import { hasDraft } from "../session/draftStore";
+import { onOutboxChange, rejectedCount, retryRejected } from "../session/outbox";
+import { syncOutbox } from "../session/sync";
 import type { TodayData } from "../todayData";
 
 type Loaded = {
@@ -118,6 +120,43 @@ export function Today() {
     };
   }, []);
 
+  // Entrenos que el servidor rechazó: siguen guardados en el móvil y se pueden reintentar desde aquí.
+  const [rejected, setRejected] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      rejectedCount()
+        .then((count) => {
+          if (active) setRejected(count);
+        })
+        .catch(() => {
+          // Sin IndexedDB no hay cola ni rechazados.
+        });
+    };
+    refresh();
+    // La cola se envía al abrir la app, a la vez que se pinta Hoy: el rechazo puede llegar después.
+    const stop = onOutboxChange(refresh);
+    return () => {
+      active = false;
+      stop();
+    };
+  }, []);
+
+  async function retryRejectedWorkouts() {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await retryRejected();
+      await syncOutbox();
+    } catch {
+      // Sin red o sin sesión se quedan en la cola; el recuento de abajo dice qué ha pasado.
+    } finally {
+      setRejected(await rejectedCount().catch(() => 0));
+      setRetrying(false);
+    }
+  }
+
   const exerciseNames = useMemo(
     () =>
       state.status === "ready" && state.exercises !== null
@@ -134,6 +173,19 @@ export function Today() {
           <Link to="/entreno/sesion" className="button button-primary">
             Continuar
           </Link>
+        </div>
+      ) : null}
+
+      {rejected > 0 ? (
+        <div className="banner banner-warning" role="status">
+          <span>
+            {rejected === 1
+              ? "1 entreno no se ha podido guardar en el servidor y sigue en este móvil"
+              : `${rejected} entrenos no se han podido guardar en el servidor y siguen en este móvil`}
+          </span>
+          <button type="button" className="button" disabled={retrying} onClick={() => void retryRejectedWorkouts()}>
+            Reintentar
+          </button>
         </div>
       ) : null}
 
