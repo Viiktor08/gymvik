@@ -50,6 +50,9 @@ const server = {
   exercises: [exercise("e-press", "Press banca"), exercise("e-fondos", "Fondos")],
   settings: { shortcutName: "Gymvik Pasos" } as Partial<Settings>,
   todayFails: null as "offline" | 500 | null,
+  // Si se activa, la siguiente petición a /api/today se queda esperando hasta que se llame a `releaseToday`.
+  holdNextToday: false,
+  releaseToday: null as (() => void) | null,
   exercisesFail: false,
   settingsFail: false,
   creatineDelete: 200 as number,
@@ -71,6 +74,12 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   server.calls.push({ method, path, body });
 
   if (path === "/api/today") {
+    if (server.holdNextToday) {
+      server.holdNextToday = false;
+      return new Promise<Response>((resolve) => {
+        server.releaseToday = () => resolve(json(200, server.today));
+      });
+    }
     if (server.todayFails === "offline") throw new TypeError("Failed to fetch");
     if (server.todayFails === 500) return json(500, { error: "Error interno" });
     return json(200, server.today);
@@ -83,6 +92,8 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path.startsWith("/api/creatine/")) {
     const status = method === "PUT" ? server.creatinePut : server.creatineDelete;
+    // Como el servidor de verdad: tras un PUT correcto está tomada, y tras un DELETE (o un 404) no lo está.
+    if (status === 200 || status === 404) server.today = { ...server.today, creatineToday: method === "PUT" };
     return status === 200 ? json(200, method === "PUT" ? { grams: 5 } : { deleted: true }) : json(status, { error: "Fallo simulado" });
   }
   if (path.startsWith("/api/body-metrics/") && method === "PUT") {
@@ -124,6 +135,8 @@ beforeEach(() => {
   server.exercises = [exercise("e-press", "Press banca"), exercise("e-fondos", "Fondos")];
   server.settings = { shortcutName: "Gymvik Pasos" };
   server.todayFails = null;
+  server.holdNextToday = false;
+  server.releaseToday = null;
   server.exercisesFail = false;
   server.settingsFail = false;
   server.creatineDelete = 200;
@@ -511,6 +524,56 @@ describe("Hoy: creatina", () => {
   });
 });
 
+describe("Hoy: creatina al cambiar los datos del servidor", () => {
+  it("de un día para otro la tarjeta no se queda en Tomada hoy", async () => {
+    await renderLoaded();
+    const button = screen.getByRole("button", { name: /Creatina/ });
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute("aria-pressed")).toBe("true"));
+
+    // La app pasa la noche en segundo plano: al volver, Hoy es otro día y la creatina no está tomada.
+    server.today = todayData({ date: "2026-11-11", creatineToday: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(await screen.findByText("Miércoles, 11 de noviembre")).toBeTruthy();
+    const fresh = screen.getByRole("button", { name: /Creatina/ });
+    expect(fresh.getAttribute("aria-pressed")).toBe("false");
+    expect(within(fresh).getByText("Sin tomar hoy")).toBeTruthy();
+
+    // Y el siguiente toque marca el día nuevo (PUT), no intenta desmarcarlo (DELETE).
+    server.calls = [];
+    fireEvent.click(fresh);
+    await waitFor(() => expect(callsTo("PUT", "/api/creatine/")).toHaveLength(1));
+    expect(callsTo("PUT", "/api/creatine/")[0]?.path).toBe("/api/creatine/2026-11-11");
+    expect(callsTo("DELETE", "/api/creatine/")).toHaveLength(0);
+  });
+
+  it("el mismo día, si el servidor dice que ya no está tomada (otro dispositivo), se actualiza", async () => {
+    await renderLoaded();
+    const button = screen.getByRole("button", { name: /Creatina/ });
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute("aria-pressed")).toBe("true"));
+
+    server.today = todayData({ creatineToday: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Creatina/ }).getAttribute("aria-pressed")).toBe("false"));
+  });
+
+  it("tras marcarla se mantiene marcada aunque Hoy se refresque con ella marcada", async () => {
+    await renderLoaded();
+    const button = screen.getByRole("button", { name: /Creatina/ });
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute("aria-pressed")).toBe("true"));
+
+    // Los pasos nuevos prueban que el refresco ya se ha pintado.
+    server.today = todayData({ creatineToday: true, steps: 6000 });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await screen.findByText("6.000");
+    expect(screen.getByRole("button", { name: /Creatina/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
 describe("Hoy: semana", () => {
   it("pinta los siete días de lunes a domingo con los entrenos marcados y el contador", async () => {
     server.today = todayData({ week: { count: 2, goal: 3, days: [true, false, true, false, false, false, false] } });
@@ -626,6 +689,48 @@ describe("Hoy: carga y errores", () => {
 
     expect(await screen.findByText("6.000")).toBeTruthy();
     expect(screen.queryByText("Cargando…")).toBeNull();
+  });
+
+  it("si vuelves a la app mientras carga y ese segundo intento falla, sale Sin conexión y Reintentar, no Cargando… para siempre", async () => {
+    server.holdNextToday = true;
+    renderToday();
+    expect(screen.getByText("Cargando…")).toBeTruthy();
+    await waitFor(() => expect(callsTo("GET", "/api/today")).toHaveLength(1));
+
+    // La primera petición sigue pendiente; al volver a la app se pide otra y esa falla.
+    server.todayFails = "offline";
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(await screen.findByText("Sin conexión")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
+    expect(screen.queryByText("Cargando…")).toBeNull();
+
+    // La primera respuesta llega tarde: ya no vale y no pisa el estado actual.
+    server.releaseToday?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByText("Sin conexión")).toBeTruthy();
+  });
+
+  it("si vuelves a la app mientras carga y la segunda petición sale bien, se pinta la pantalla", async () => {
+    server.holdNextToday = true;
+    renderToday();
+    await waitFor(() => expect(callsTo("GET", "/api/today")).toHaveLength(1));
+
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Hola, Victor" })).toBeTruthy();
+    expect(screen.queryByText("Cargando…")).toBeNull();
+  });
+
+  it("estando en error, volver a la app lo reintenta", async () => {
+    server.todayFails = "offline";
+    renderToday();
+    await screen.findByText("Sin conexión");
+
+    server.todayFails = null;
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Hola, Victor" })).toBeTruthy();
   });
 
   it("un refresco que falla deja en pantalla los datos que ya había", async () => {

@@ -46,15 +46,28 @@ export function Today() {
   // Solo vale la última petición: un refresco lento no debe pisar a uno posterior.
   const latest = useRef(0);
 
-  const load = useCallback(async (silent: boolean) => {
+  // Estado actual para decidir si un refresco puede ser silencioso (la pantalla no se lee dentro del callback).
+  const status = useRef<State["status"]>("loading");
+
+  const load = useCallback(async (background: boolean) => {
     const request = ++latest.current;
-    if (!silent) setState({ status: "loading" });
+    // En segundo plano solo si ya hay datos en pantalla. Si no (cargando o en error), esta petición sustituye a la
+    // anterior y tiene que dejar un resultado visible: datos o error con Reintentar, nunca un "Cargando…" eterno.
+    const silent = background && status.current === "ready";
+    if (!silent) {
+      status.current = "loading";
+      setState({ status: "loading" });
+    }
     try {
       const loaded = await fetchToday();
-      if (request === latest.current) setState({ status: "ready", ...loaded });
+      if (request === latest.current) {
+        status.current = "ready";
+        setState({ status: "ready", ...loaded });
+      }
     } catch (failure) {
       // Un refresco en segundo plano que falla deja en pantalla lo que ya había.
       if (silent || request !== latest.current) return;
+      status.current = "error";
       setState({
         status: "error",
         offline: failure instanceof ApiError && failure.status === 0,
@@ -62,6 +75,17 @@ export function Today() {
       });
     }
   }, []);
+
+  // El servidor confirmó la creatina: se refleja ya y se vuelve a pedir Hoy (anula cualquier refresco anterior en vuelo).
+  const creatineChanged = useCallback(
+    (taken: boolean) => {
+      setState((previous) =>
+        previous.status === "ready" ? { ...previous, today: { ...previous.today, creatineToday: taken } } : previous,
+      );
+      void load(true);
+    },
+    [load],
+  );
 
   useEffect(() => {
     void load(false);
@@ -165,7 +189,12 @@ export function Today() {
             />
           </div>
 
-          <CreatineCard date={state.today.date} taken={state.today.creatineToday} />
+          <CreatineCard
+            key={state.today.date}
+            date={state.today.date}
+            taken={state.today.creatineToday}
+            onChange={creatineChanged}
+          />
 
           <WeekCard
             date={state.today.date}
