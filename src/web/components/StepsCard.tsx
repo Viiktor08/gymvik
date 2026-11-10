@@ -8,9 +8,13 @@ type Props = {
   shortcutName: string | null;
 };
 
-/** Enlace que abre el Atajo y, al terminar, devuelve a la app. */
+/**
+ * Enlace que abre el Atajo. Sin `x-success` a propósito: iOS abriría esa URL https en Safari, no en la app
+ * instalada, con otra cookie y delante del login (spec §5.1). Al terminar, iOS enseña el enlace "◀ Gymvik" para
+ * volver a la app, y Hoy se refresca al volver a primer plano.
+ */
 function shortcutUrl(shortcutName: string): string {
-  return `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutName)}&x-success=${encodeURIComponent(location.origin)}`;
+  return `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutName)}`;
 }
 
 /** Pasos de hoy frente al objetivo y el botón "Sincronizar". */

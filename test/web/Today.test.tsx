@@ -301,13 +301,15 @@ describe("Hoy: pasos", () => {
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/);
   });
 
-  it("Sincronizar abre el Atajo con el nombre y el origen codificados", async () => {
+  it("Sincronizar abre el Atajo con el nombre codificado y sin x-success", async () => {
     server.settings = { shortcutName: "Pasos & Salud ñ" };
     await renderLoaded();
     const link = screen.getByRole("link", { name: "Sincronizar" });
-    expect(link.getAttribute("href")).toBe(
-      `shortcuts://run-shortcut?name=${encodeURIComponent("Pasos & Salud ñ")}&x-success=${encodeURIComponent(location.origin)}`,
-    );
+    // Sin x-success: iOS abriría esa URL https en Safari, con otra cookie y el login, en vez de la app instalada.
+    // Al terminar el Atajo, iOS enseña el enlace "◀ Gymvik" para volver, y Hoy se refresca al volver.
+    expect(link.getAttribute("href")).toBe(`shortcuts://run-shortcut?name=${encodeURIComponent("Pasos & Salud ñ")}`);
+    expect(link.getAttribute("href")).not.toContain("x-success");
+    expect(link.getAttribute("href")).not.toContain("http");
   });
 
   it("sin el nombre del Atajo (ajustes no disponibles) no ofrece Sincronizar", async () => {
