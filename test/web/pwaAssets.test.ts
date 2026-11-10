@@ -1,4 +1,4 @@
-// Los archivos estáticos que hacen la app instalable: iconos (scripts/generate-icons.ts) y metas de index.html.
+// Los archivos estáticos que hacen la app instalable: iconos (scripts/icons.py) y metas de index.html.
 // Lee archivos con Node: se comprueba con tsconfig.json (tipos de Node, sin DOM) y no con tsconfig.web.json.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ const ROOT = join(import.meta.dirname, "..", "..");
 
 type Png = { width: number; height: number; alphaAt: (x: number, y: number) => number };
 
-/** Lee un PNG RGBA de 8 bits sin filtros (el que escribe scripts/generate-icons.ts). */
+/** Lee un PNG RGBA de 8 bits sin filtros (el que escribe scripts/icons.py). */
 function readPng(file: string): Png {
   const bytes = readFileSync(join(ROOT, "public", "icons", file));
   expect(bytes.subarray(1, 4).toString("ascii"), `${file} no es un PNG`).toBe("PNG");
@@ -62,12 +62,12 @@ describe("index.html", () => {
 
   it("declara el icono de iOS, el de la pestaña y las metas de app instalada, y esos archivos existen", () => {
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />');
-    expect(html).toContain('<link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />');
+    expect(html).toContain('<link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />');
     expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
     expect(html).toContain('<meta name="mobile-web-app-capable" content="yes" />');
     expect(html).toContain('<meta name="apple-mobile-web-app-title" content="Gymvik" />');
     expect(html).toContain('<meta name="theme-color" content="#1b7a4b" />');
-    for (const file of ["apple-touch-icon.png", "icon.svg"]) expect(existsSync(join(ROOT, "public", "icons", file)), file).toBe(true);
+    for (const file of ["apple-touch-icon.png", "favicon-32.png"]) expect(existsSync(join(ROOT, "public", "icons", file)), file).toBe(true);
   });
 
   it("no lleva scripts ni estilos incrustados (la CSP no los permite)", () => {

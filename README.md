@@ -32,7 +32,7 @@ La app queda en http://localhost:5173 y la API en `/api/*` (por ejemplo `/api/he
 | `npm run build` | Compila el front y el Worker en `dist/`. |
 | `npm test` | Tests con Vitest: proyecto `worker` (runtime de Workers) y proyecto `web` (jsdom). |
 | `npm run typecheck` | Comprueba tipos del Worker (`tsconfig.json`), de la web (`tsconfig.web.json`) y del service worker (`tsconfig.sw.json`, lib de WebWorker). |
-| `npm run icons` | Regenera los iconos de `public/icons/` (PNG 192, 512, maskable y de iOS, más el SVG). Solo hace falta si cambia el dibujo; los PNG están versionados. |
+| `npm run icons` | Regenera los iconos de `public/icons/` (PNG 192, 512, maskable, de iOS y favicon) a partir de `assets/icon-source.png`. Necesita Python con Pillow. Solo hace falta si cambia el icono; los PNG están versionados. |
 | `npm run types` | Regenera `worker-configuration.d.ts` tras cambiar `wrangler.jsonc` o `.dev.vars.example`. |
 | `npm run seed:local` | Siembra los ejercicios de la biblioteca en la D1 local. Es idempotente. Antes: `npx wrangler d1 migrations apply gymvik --local`. |
 | `npm run seed:remote` | Lo mismo en la D1 de Cloudflare (solo cuando la base remota exista y tenga las migraciones aplicadas). |

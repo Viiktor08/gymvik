@@ -13,7 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.sw.json",
     "types": "wrangler types --env-file .dev.vars.example",
-    "icons": "node scripts/generate-icons.ts",
+    "icons": "python3 -I scripts/icons.py",
     "seed:local": "node scripts/seed.ts --local",
     "seed:remote": "node scripts/seed.ts --remote"
   },
