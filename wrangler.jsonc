@@ -13,8 +13,7 @@
     {
       "binding": "DB",
       "database_name": "gymvik",
-      // Marcador: la Tarea 25 pone el id real de la base de datos remota.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "831accf2-cac9-46e0-baf1-2302bf728088",
       "migrations_dir": "migrations"
     }
   ],
