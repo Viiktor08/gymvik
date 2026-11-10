@@ -6,6 +6,7 @@ Si algo falla, apunta qué pantalla, qué hiciste y qué pasó (una captura ayud
 
 ## Antes de empezar
 
+- [ ] Decide el nombre de la dirección **antes de registrar Face ID**. Wrangler registró el subdominio `<tu-subdominio>.workers.dev` en tu cuenta de Cloudflare de forma automática, sin que lo eligieras, y la app está en `<tu-app>.<tu-subdominio>.workers.dev`. La passkey queda ligada a ese nombre de host: si luego lo cambias, deja de servir y hay que registrarla de nuevo. Si te vale, sigue. Si prefieres otro nombre, cámbialo en el panel de Cloudflare (Workers → Subdominio), y después actualiza `.superpowers/setup-url.txt` y la dirección del principio de esta lista con el host nuevo.
 - [ ] Tienes la URL de configuración (`https://<tu-app>.<tu-subdominio>.workers.dev/setup?token=…`). Está en `.superpowers/setup-url.txt`, en el Mac; no la pegues en ningún sitio compartido.
 - [ ] Tienes a mano papel o un gestor de contraseñas para los 8 códigos de recuperación.
 - [ ] Vas a probar el modo avión y los avisos: déjate un par de días para la parte "al día siguiente" de la sección 5.
