@@ -44,8 +44,15 @@ function completeSettings(): Settings {
   };
 }
 
+type StoredPasskey = { id: string; label: string; createdAt: string; transports: string[] };
+
+const LOST_PHONE: StoredPasskey = { id: "cred-perdido", label: "iPhone perdido", createdAt: "2026-10-02T10:00:00.000Z", transports: [] };
+const OLD_IPAD: StoredPasskey = { id: "cred-ipad", label: "", createdAt: "2026-10-20T10:00:00.000Z", transports: [] };
+
 const server = {
   me: { authenticated: false, setupRequired: false } as Me,
+  /** Las passkeys que hay en el servidor; `null` hace fallar el listado. */
+  passkeys: [LOST_PHONE] as StoredPasskey[] | null,
   /** "hang": la petición no responde ni falla hasta que se aborta, como una señal que no llega. */
   meFails: null as "offline" | "hang" | 500 | 401 | 403 | null,
   settings: completeSettings(),
@@ -77,9 +84,20 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === "/api/settings") return json(200, server.settings);
   if (path === "/api/auth/recover" && method === "POST") {
     const { code } = JSON.parse(String(init?.body)) as { code: string };
-    return code === "aaaa-bbbb-cccc-dddd"
-      ? json(200, { mustRegisterPasskey: true })
-      : json(401, { error: "Código de recuperación no válido" });
+    if (code !== "aaaa-bbbb-cccc-dddd") return json(401, { error: "Código de recuperación no válido" });
+    // Como el servidor real: el código abre la sesión, pero la app no se entera hasta volver a preguntar a /me.
+    signIn();
+    return json(200, { mustRegisterPasskey: true });
+  }
+  if (path === "/api/auth/passkeys" && method === "GET") {
+    return server.passkeys === null ? json(500, { error: "Error interno" }) : json(200, { passkeys: server.passkeys });
+  }
+  if (path.startsWith("/api/auth/passkeys/") && method === "DELETE") {
+    const stored = server.passkeys ?? [];
+    if (stored.length <= 1) return json(409, { error: "No puedes borrar tu única passkey" });
+    const id = decodeURIComponent(path.slice("/api/auth/passkeys/".length));
+    server.passkeys = stored.filter((passkey) => passkey.id !== id);
+    return json(200, { ok: true });
   }
   return json(404, { error: "No encontrado" });
 }
@@ -105,6 +123,7 @@ function renderAt(entry: string) {
 beforeEach(() => {
   server.me = { authenticated: false, setupRequired: false };
   server.meFails = null;
+  server.passkeys = [LOST_PHONE];
   server.settings = completeSettings();
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
@@ -413,20 +432,108 @@ describe("Login", () => {
 });
 
 describe("Recuperar", () => {
-  it("con un código válido pasa a registrar una passkey nueva y lleva a Hoy", async () => {
-    webauthn.registerPasskey.mockImplementation(async () => signIn());
-    renderAt("/recuperar");
+  async function enterCode() {
     fireEvent.change(await screen.findByLabelText("Código de recuperación"), {
       target: { value: "aaaa-bbbb-cccc-dddd" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    return screen.findByRole("heading", { name: "Registra una passkey nueva" });
+  }
 
-    expect(await screen.findByRole("heading", { name: "Registra una passkey nueva" })).toBeTruthy();
+  /** Lo que hace `registerPasskey` de verdad: el servidor guarda la passkey de este dispositivo. */
+  function createsPasskey() {
+    webauthn.registerPasskey.mockImplementationOnce(async () => {
+      server.passkeys = [...(server.passkeys ?? []), { id: "cred-nueva", label: "iPhone nuevo", createdAt: "2026-11-10T10:00:00.000Z", transports: [] }];
+    });
+  }
+
+  it("con un código válido pasa a registrar una passkey nueva y, al crearla, a Passkey creada", async () => {
+    createsPasskey();
+    renderAt("/recuperar");
+    await enterCode();
     expect(webauthn.registerPasskey).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Crear passkey" }));
 
-    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Passkey creada" })).toBeTruthy();
     expect(webauthn.registerPasskey).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+  });
+
+  it("tras aceptar el código lista las passkeys que ya había, para quitar la del dispositivo perdido", async () => {
+    server.passkeys = [LOST_PHONE, OLD_IPAD];
+    renderAt("/recuperar");
+    await enterCode();
+
+    expect(await screen.findByText("iPhone perdido")).toBeTruthy();
+    expect(screen.getByText("Passkey sin nombre")).toBeTruthy();
+    expect(screen.getByText("Añadida el 2 oct 2026")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Quitar passkey iPhone perdido" }));
+    const sheet = await screen.findByRole("dialog", { name: "¿Quitar esta passkey?" });
+    expect(within(sheet).getByText(/se cerrará la sesión en los demás dispositivos/i)).toBeTruthy();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Sí, quitar" }));
+
+    await waitFor(() => expect(screen.queryByText("iPhone perdido")).toBeNull());
+    expect(screen.getByText("Passkey sin nombre")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([path, init]) => path === "/api/auth/passkeys/cred-perdido" && init?.method === "DELETE")).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("antes de crear la nueva, la única passkey no se puede quitar y lo explica", async () => {
+    renderAt("/recuperar");
+    await enterCode();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Quitar passkey iPhone perdido" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sí, quitar" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/única passkey/);
+    expect(screen.getAllByText("iPhone perdido").length).toBeGreaterThan(0);
+  });
+
+  it("al crear la passkey nueva vuelve a listar y deja quitar la vieja antes de continuar", async () => {
+    createsPasskey();
+    renderAt("/recuperar");
+    await enterCode();
+    await screen.findByText("iPhone perdido");
+    fireEvent.click(screen.getByRole("button", { name: "Crear passkey" }));
+
+    expect(await screen.findByRole("heading", { name: "Passkey creada" })).toBeTruthy();
+    expect(await screen.findByText("iPhone nuevo")).toBeTruthy();
+    expect(screen.getByText("iPhone perdido")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar passkey iPhone perdido" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sí, quitar" }));
+    await waitFor(() => expect(screen.queryByText("iPhone perdido")).toBeNull());
+    expect(screen.getByText("iPhone nuevo")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+  });
+
+  it("si las passkeys no se pueden listar no estorba: se crea la nueva y se continúa", async () => {
+    server.passkeys = null;
+    webauthn.registerPasskey.mockImplementationOnce(async () => undefined);
+    renderAt("/recuperar");
+    await enterCode();
+    fireEvent.click(screen.getByRole("button", { name: "Crear passkey" }));
+
+    expect(await screen.findByRole("heading", { name: "Passkey creada" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+  });
+
+  it("si crear la passkey falla, ofrece Continuar sin passkey, que lleva a Hoy", async () => {
+    webauthn.registerPasskey.mockRejectedValueOnce(new DOMException("x", "NotAllowedError"));
+    renderAt("/recuperar");
+    await enterCode();
+    // Mientras no haya fallado nada, la salida no estorba.
+    expect(screen.queryByRole("link", { name: "Continuar sin passkey" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Crear passkey" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/cancelado/);
+    fireEvent.click(screen.getByRole("link", { name: "Continuar sin passkey" }));
+
+    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
   });
 
   it("con un código no válido enseña el error y se queda en el formulario", async () => {
@@ -453,8 +560,8 @@ describe("Recuperar", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Crear passkey" }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/cancelado/);
 
-    webauthn.registerPasskey.mockImplementationOnce(async () => signIn());
+    webauthn.registerPasskey.mockImplementationOnce(async () => undefined);
     fireEvent.click(screen.getByRole("button", { name: "Crear passkey" }));
-    expect(await screen.findByRole("heading", { name: "Hoy" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Passkey creada" })).toBeTruthy();
   });
 });

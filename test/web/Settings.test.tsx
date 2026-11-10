@@ -419,6 +419,17 @@ describe("Ajustes: cuenta", () => {
     expect(within(account).getByText("iPhone de Victor")).toBeTruthy();
   });
 
+  it("la confirmación de quitar una passkey avisa de que se cierran las sesiones de los demás dispositivos", async () => {
+    await renderSettings();
+    const account = region("Cuenta");
+    await within(account).findByText("iPhone de Victor");
+    fireEvent.click(within(account).getByRole("button", { name: "Quitar passkey iPhone de Victor" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "¿Quitar esta passkey?" });
+    expect(text(sheet)).toContain("Se cerrará la sesión en los demás dispositivos");
+    expect(text(sheet)).toContain("en este seguirás dentro");
+  });
+
   it("quitar una passkey pide confirmación y la borra", async () => {
     await renderSettings();
     const account = region("Cuenta");

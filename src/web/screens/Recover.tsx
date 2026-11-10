@@ -1,13 +1,33 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../api";
 import { AuthLayout } from "../components/AuthLayout";
 import { useAccessAction, useAuth } from "../auth";
+import { PasskeyList, fetchPasskeys } from "../settings/PasskeyList";
+import { useLoad } from "../useLoad";
 import { registerPasskey } from "../webauthn";
 
 /**
+ * Las passkeys que ya hay, con "Quitar": tras recuperar la cuenta por haber perdido un dispositivo, hay que
+ * quitar la suya (el servidor cierra las demás sesiones al hacerlo). Si no se pueden listar, no se enseña nada:
+ * no es imprescindible para entrar.
+ */
+function ExistingPasskeys() {
+  const { state, reload } = useLoad(fetchPasskeys);
+  if (state.status !== "ready" || state.data.length === 0) return null;
+  return (
+    <section className="stack" aria-label="Passkeys registradas">
+      <h2>Passkeys registradas</h2>
+      <p className="muted">Si has perdido un dispositivo, quita su passkey para que no pueda volver a entrar.</p>
+      <PasskeyList passkeys={state.data} onRemoved={() => void reload()} />
+    </section>
+  );
+}
+
+/**
  * Recuperación: un código de un solo uso abre la sesión y, a continuación,
- * lleva directamente a registrar una passkey nueva en este dispositivo.
+ * lleva directamente a registrar una passkey nueva en este dispositivo y a
+ * quitar las de los dispositivos que ya no se tengan.
  */
 export function Recover() {
   const inputId = useId();
@@ -15,7 +35,7 @@ export function Recover() {
   const { refresh } = useAuth();
   const { pending, error, run } = useAccessAction();
   const [code, setCode] = useState("");
-  const [accepted, setAccepted] = useState(false);
+  const [step, setStep] = useState<"code" | "passkey" | "created">("code");
 
   function submitCode(event: FormEvent) {
     event.preventDefault();
@@ -23,14 +43,25 @@ export function Recover() {
     if (trimmed === "") return;
     void run(async () => {
       await api("/api/auth/recover", { method: "POST", body: JSON.stringify({ code: trimmed }) });
-      setAccepted(true);
+      setStep("passkey");
     });
   }
 
   async function createPasskey() {
     await registerPasskey();
     await refresh();
+    setStep("created");
+  }
+
+  /** La sesión la abrió el código, pero la app todavía no lo sabe: hay que preguntar antes de ir a Hoy. */
+  async function goToday() {
+    await refresh();
     navigate("/", { replace: true });
+  }
+
+  function continueWithoutPasskey(event: MouseEvent) {
+    event.preventDefault();
+    void goToday();
   }
 
   const errorMessage = error ? (
@@ -39,7 +70,7 @@ export function Recover() {
     </p>
   ) : null;
 
-  if (accepted) {
+  if (step === "passkey") {
     return (
       <AuthLayout
         title="Registra una passkey nueva"
@@ -48,6 +79,31 @@ export function Recover() {
         <div className="actions">
           <button type="button" className="button button-primary" disabled={pending} onClick={() => void run(createPasskey)}>
             {pending ? "Creando…" : "Crear passkey"}
+          </button>
+        </div>
+        {errorMessage}
+        {error ? (
+          <p className="aside">
+            <Link to="/" onClick={continueWithoutPasskey}>
+              Continuar sin passkey
+            </Link>
+          </p>
+        ) : null}
+        <ExistingPasskeys />
+      </AuthLayout>
+    );
+  }
+
+  if (step === "created") {
+    return (
+      <AuthLayout
+        title="Passkey creada"
+        intro="Ya puedes entrar con ella en este dispositivo. Quita las passkeys de los dispositivos que ya no tengas."
+      >
+        <ExistingPasskeys />
+        <div className="actions">
+          <button type="button" className="button button-primary" disabled={pending} onClick={() => void run(goToday)}>
+            Continuar
           </button>
         </div>
         {errorMessage}

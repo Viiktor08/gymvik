@@ -1,24 +1,12 @@
 import { useId, useState } from "react";
-import { ApiError } from "../api";
 import { LoadError } from "../components/LoadError";
 import { Sheet } from "../components/Sheet";
 import { failureMessage, useLoad } from "../useLoad";
 import { passkeyErrorMessage, registerPasskey } from "../webauthn";
 import { CopyButton } from "./CopyButton";
-import { formatInstantDay } from "./instants";
 import { OneTimeSecret } from "./OneTimeSecret";
+import { PasskeyList, fetchPasskeys } from "./PasskeyList";
 import { leaveIfSignedOut, sessionApi } from "./sessionApi";
-
-type Passkey = { id: string; label: string; createdAt: string; transports: string[] };
-
-async function fetchPasskeys(): Promise<Passkey[]> {
-  const { passkeys } = await sessionApi<{ passkeys: Passkey[] }>("/api/auth/passkeys");
-  return passkeys;
-}
-
-function passkeyName(passkey: Passkey): string {
-  return passkey.label === "" ? "Passkey sin nombre" : passkey.label;
-}
 
 function PasskeysCard() {
   const labelId = useId();
@@ -27,9 +15,6 @@ function PasskeysCard() {
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<Passkey | null>(null);
-  const [removeBusy, setRemoveBusy] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
 
   async function add() {
     if (adding) return;
@@ -50,34 +35,6 @@ function PasskeysCard() {
     }
   }
 
-  function closeRemove() {
-    setRemoving(null);
-    setRemoveError(null);
-  }
-
-  async function remove() {
-    if (removing === null || removeBusy) return;
-    setRemoveBusy(true);
-    setRemoveError(null);
-    try {
-      await sessionApi(`/api/auth/passkeys/${encodeURIComponent(removing.id)}`, { method: "DELETE" });
-      closeRemove();
-      void reload();
-    } catch (failure) {
-      if (failure instanceof ApiError && failure.status === 409) {
-        setRemoveError("Es tu única passkey, así que no se puede quitar. Añade otra primero.");
-      } else if (failure instanceof ApiError && failure.status === 404) {
-        // Ya no existe (se quitó desde otro sitio): el resultado es el que se quería.
-        closeRemove();
-        void reload();
-      } else {
-        setRemoveError(failureMessage(failure, "No se pudo quitar la passkey"));
-      }
-    } finally {
-      setRemoveBusy(false);
-    }
-  }
-
   return (
     <div className="card">
       <h3 className="card-title">Passkeys</h3>
@@ -85,26 +42,7 @@ function PasskeysCard() {
       {state.status === "error" ? (
         <LoadError message={state.message} offline={state.offline} onRetry={() => void reload()} />
       ) : null}
-      {state.status === "ready" ? (
-        <ul className="item-list">
-          {state.data.map((passkey) => (
-            <li key={passkey.id} className="item-row">
-              <span className="item-main">
-                <strong>{passkeyName(passkey)}</strong>
-                <span className="muted">{`Añadida el ${formatInstantDay(passkey.createdAt)}`}</span>
-              </span>
-              <button
-                type="button"
-                className="button"
-                aria-label={`Quitar passkey ${passkey.label === "" ? "sin nombre" : passkey.label}`}
-                onClick={() => setRemoving(passkey)}
-              >
-                Quitar
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {state.status === "ready" ? <PasskeyList passkeys={state.data} onRemoved={() => void reload()} /> : null}
 
       <div>
         <label className="field-label" htmlFor={labelId}>
@@ -134,23 +72,6 @@ function PasskeysCard() {
           {error}
         </p>
       ) : null}
-
-      <Sheet open={removing !== null} title="¿Quitar esta passkey?" onClose={closeRemove}>
-        <p>{`Con «${removing === null ? "" : passkeyName(removing)}» ya no podrás entrar desde ese dispositivo.`}</p>
-        {removeError ? (
-          <p role="alert" className="form-error">
-            {removeError}
-          </p>
-        ) : null}
-        <div className="actions">
-          <button type="button" className="button button-danger" disabled={removeBusy} onClick={() => void remove()}>
-            Sí, quitar
-          </button>
-          <button type="button" className="button" disabled={removeBusy} onClick={closeRemove}>
-            Cancelar
-          </button>
-        </div>
-      </Sheet>
     </div>
   );
 }
