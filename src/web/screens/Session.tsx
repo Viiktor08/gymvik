@@ -4,7 +4,7 @@ import { ApiError } from "../api";
 import { LoadError } from "../components/LoadError";
 import { LiveSession } from "../session/LiveSession";
 import { SessionSummary, type Finished } from "../session/SessionSummary";
-import { beginSession, type StartOutcome } from "../session/startSession";
+import { beginSession, type SessionIntent, type StartOutcome } from "../session/startSession";
 import { failureMessage } from "../useLoad";
 
 const startFormat = new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
@@ -20,28 +20,38 @@ type State =
   | { status: "error"; message: string; offline: boolean }
   | { status: "outcome"; outcome: StartOutcome };
 
+/** Qué pide la dirección: una rutina, un entreno libre nuevo (`?libre=1`) o retomar lo que haya (sin parámetros). */
+function intentFrom(routineId: string | null, free: boolean): SessionIntent {
+  if (routineId !== null) return { kind: "routine", routineId };
+  return free ? { kind: "free" } : { kind: "continue" };
+}
+
 /**
  * Sesión en directo (spec §5.3). Funciona sin conexión: empieza con las rutinas y la última vez guardadas en el
  * móvil, guarda cada cambio en el móvil y al terminar manda el entreno cuando puede.
  *
  * - `/entreno/sesion?rutina=<id>` empieza esa rutina.
- * - `/entreno/sesion` continúa el borrador o, si no hay, empieza un entreno libre.
+ * - `/entreno/sesion?libre=1` (el botón Entreno libre) empieza un entreno libre; si hay un borrador de una
+ *   rutina, o libre pero olvidado, pregunta.
+ * - `/entreno/sesion` (el aviso "Continuar" de Hoy) continúa el borrador o, si no hay, empieza un entreno libre.
  */
 export function Session() {
   const [params] = useSearchParams();
   const routineId = params.get("rutina");
+  const free = params.get("libre") === "1";
   const navigate = useNavigate();
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
-  // La rutina para la que el usuario ya ha dicho "sí, descarta el entreno en curso".
+  // Lo que el usuario ya ha confirmado empezar ("sí, descarta el entreno en curso"): una rutina o el entreno libre.
+  const intentKey = routineId !== null ? `rutina:${routineId}` : free ? "libre" : null;
   const [replaceFor, setReplaceFor] = useState<string | null>(null);
   const [finished, setFinished] = useState<Finished | null>(null);
-  const replace = routineId !== null && replaceFor === routineId;
+  const replace = intentKey !== null && replaceFor === intentKey;
 
   useEffect(() => {
     let current = true;
     setState({ status: "loading" });
-    beginSession(routineId, replace).then(
+    beginSession(intentFrom(routineId, free), replace).then(
       (outcome) => {
         if (current) setState({ status: "outcome", outcome });
       },
@@ -57,7 +67,7 @@ export function Session() {
     return () => {
       current = false;
     };
-  }, [routineId, replace, attempt]);
+  }, [routineId, free, replace, attempt]);
 
   if (finished) {
     return <SessionSummary {...finished} onDone={() => navigate("/")} />;
@@ -118,6 +128,11 @@ export function Session() {
       </button>
     );
 
+    const { target } = outcome;
+    // Sin saber el nombre de la rutina (rutinas sin cargar) no se puede empezar de nuevo; un entreno libre sí.
+    const canRestart = target.kind === "free" || target.name !== null;
+    const restart = () => setReplaceFor(intentKey);
+
     if (outcome.reason === "stale") {
       return (
         <section className="screen stack">
@@ -128,11 +143,11 @@ export function Session() {
           </p>
           <div className="actions">
             {continueButton("Continuar")}
-            {outcome.routineName === null ? null : (
-              <button type="button" className="button button-danger" onClick={() => setReplaceFor(routineId)}>
+            {canRestart ? (
+              <button type="button" className="button button-danger" onClick={restart}>
                 Empezar de nuevo
               </button>
-            )}
+            ) : null}
           </div>
         </section>
       );
@@ -141,20 +156,20 @@ export function Session() {
     return (
       <section className="screen stack">
         <h1>Ya tienes un entreno en curso</h1>
-        {outcome.routineName === null ? (
+        {target.kind === "routine" && target.name === null ? (
           <p className="muted">Ahora no se puede cargar la otra rutina. Puedes seguir con el entreno en curso.</p>
         ) : (
           <p className="muted">
-            Si empiezas {outcome.routineName}, el entreno en curso se descarta y se pierden sus series.
+            {`Si empiezas ${target.kind === "free" ? "un entreno libre" : target.name}, el entreno en curso se descarta y se pierden sus series.`}
           </p>
         )}
         <div className="actions">
           {continueButton("Continuar el entreno en curso")}
-          {outcome.routineName === null ? null : (
-            <button type="button" className="button button-danger" onClick={() => setReplaceFor(routineId)}>
-              {`Empezar ${outcome.routineName} y descartar el anterior`}
+          {canRestart ? (
+            <button type="button" className="button button-danger" onClick={restart}>
+              {`Empezar ${target.kind === "free" ? "un entreno libre" : target.name} y descartar el anterior`}
             </button>
-          )}
+          ) : null}
         </div>
       </section>
     );

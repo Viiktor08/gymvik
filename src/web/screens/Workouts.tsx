@@ -132,7 +132,8 @@ export function Workouts() {
       <h1>Entreno</h1>
 
       <div className="card-grid">
-        <Link to="/entreno/sesion" className="button button-primary">
+        {/* Su propia intención: sin `libre`, /entreno/sesion es el "Continuar" de Hoy y retoma cualquier borrador. */}
+        <Link to="/entreno/sesion?libre=1" className="button button-primary">
           Entreno libre
         </Link>
         <Link to="/entreno/rutina/nueva" className="button">

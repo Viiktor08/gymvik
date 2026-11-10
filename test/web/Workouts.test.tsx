@@ -161,7 +161,8 @@ describe("Entreno: estructura", () => {
 
   it("ofrece Entreno libre, Nueva rutina, Historial y Biblioteca", async () => {
     await renderLoaded();
-    expect(screen.getByRole("link", { name: "Entreno libre" }).getAttribute("href")).toBe("/entreno/sesion");
+    // Con su propia intención: la dirección sin parámetros es la del aviso "Continuar" de Hoy y retoma cualquier borrador.
+    expect(screen.getByRole("link", { name: "Entreno libre" }).getAttribute("href")).toBe("/entreno/sesion?libre=1");
     expect(screen.getByRole("link", { name: "Nueva rutina" }).getAttribute("href")).toBe("/entreno/rutina/nueva");
     expect(screen.getByRole("link", { name: /Historial/ }).getAttribute("href")).toBe("/entreno/historial");
     expect(screen.getByRole("link", { name: /Biblioteca/ }).getAttribute("href")).toBe("/entreno/biblioteca");

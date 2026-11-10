@@ -1221,6 +1221,132 @@ describe("un borrador olvidado de la misma rutina", () => {
   });
 });
 
+describe("Entreno libre pedido desde Entreno (?libre=1)", () => {
+  const LIBRE = "/entreno/sesion?libre=1";
+  const freeDraft = (hoursAgo: number, extra: Partial<Draft> = {}) =>
+    draftOf({ routineId: null, startedAt: new Date(Date.now() - hoursAgo * HOUR).toISOString(), ...extra });
+
+  it("sin borrador empieza un entreno libre vacío y se guarda", async () => {
+    renderSession(LIBRE);
+
+    expect(await screen.findByText("Entreno libre")).toBeTruthy();
+    await waitFor(async () => expect((await savedDraft()).routineId).toBeNull());
+  });
+
+  it("con un borrador libre de hoy (menos de 12 h) lo continúa sin preguntar", async () => {
+    await saveDraft(freeDraft(2));
+
+    renderSession(LIBRE);
+
+    await cardAppears("Press banca");
+    expect(screen.queryByText("Tienes un entreno sin terminar")).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("con un borrador libre olvidado (más de 12 h) pregunta antes de continuarlo, y no lo toca mientras tanto", async () => {
+    await saveDraft(freeDraft(30));
+
+    renderSession(LIBRE);
+
+    expect(await screen.findByText("Tienes un entreno sin terminar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Empezar de nuevo" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Press banca" })).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("Continuar sigue con el borrador libre viejo y quita ?libre de la dirección", async () => {
+    await saveDraft(freeDraft(30));
+    renderSession(LIBRE);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continuar" }));
+
+    await cardAppears("Press banca");
+    expect(screen.getByTestId("where").textContent).toBe("/entreno/sesion");
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("Empezar de nuevo descarta el borrador libre viejo y empieza uno libre con la hora de ahora", async () => {
+    await saveDraft(freeDraft(30));
+    renderSession(LIBRE);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar de nuevo" }));
+
+    expect(await screen.findByText("Todavía no hay ejercicios. Añade el primero.")).toBeTruthy();
+    await waitFor(async () => {
+      const draft = await savedDraft();
+      expect(draft.id).not.toBe("w-draft");
+      expect(draft.routineId).toBeNull();
+      expect(draft.exercises).toEqual([]);
+      expect(Date.now() - Date.parse(draft.startedAt)).toBeLessThan(60_000);
+    });
+  });
+
+  it("con un entreno de una rutina en curso pregunta, aunque sea de hoy", async () => {
+    await saveDraft(draftOf());
+
+    renderSession(LIBRE);
+
+    expect(await screen.findByText("Ya tienes un entreno en curso")).toBeTruthy();
+    expect(screen.getByText(/Si empiezas un entreno libre, el entreno en curso se descarta/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continuar el entreno en curso" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Press banca" })).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("Continuar el entreno en curso sigue con el de la rutina", async () => {
+    await saveDraft(draftOf());
+    renderSession(LIBRE);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continuar el entreno en curso" }));
+
+    await cardAppears("Press banca");
+    expect(screen.getByTestId("where").textContent).toBe("/entreno/sesion");
+  });
+
+  it("Empezar un entreno libre y descartar el anterior sustituye el borrador de la rutina", async () => {
+    await saveDraft(draftOf());
+    renderSession(LIBRE);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Empezar un entreno libre y descartar el anterior" }));
+
+    expect(await screen.findByText("Entreno libre")).toBeTruthy();
+    await waitFor(async () => {
+      const draft = await savedDraft();
+      expect(draft.id).not.toBe("w-draft");
+      expect(draft.routineId).toBeNull();
+      expect(draft.exercises).toEqual([]);
+    });
+  });
+
+  it("también pregunta aunque no se puedan cargar las rutinas: empezar uno libre no las necesita", async () => {
+    await saveDraft(draftOf());
+    server.catalogStatus = 500;
+
+    renderSession(LIBRE);
+
+    expect(await screen.findByText("Ya tienes un entreno en curso")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Empezar un entreno libre y descartar el anterior" })).toBeTruthy();
+  });
+
+  it("el aviso de Hoy (sin parámetros) sigue continuando cualquier borrador libre, aunque sea viejo, sin preguntar", async () => {
+    await saveDraft(freeDraft(30));
+
+    renderSession("/entreno/sesion");
+
+    await cardAppears("Press banca");
+    expect(screen.queryByText("Tienes un entreno sin terminar")).toBeNull();
+    expect((await savedDraft()).id).toBe("w-draft");
+  });
+
+  it("si la dirección trae rutina y libre, manda la rutina", async () => {
+    renderSession("/entreno/sesion?rutina=r-pecho&libre=1");
+
+    await cardAppears("Press banca");
+    expect((await savedDraft()).routineId).toBe("r-pecho");
+  });
+});
+
 describe("un entreno que el servidor rechaza", () => {
   it("no desaparece: el resumen dice que no se ha guardado y que sigue en el móvil", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
