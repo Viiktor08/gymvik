@@ -3,9 +3,9 @@ import { Link, useNavigate, useParams } from "react-router";
 import { formatLast } from "../../shared/prefill";
 import type { Exercise } from "../../shared/types";
 import { ApiError, api } from "../api";
-import { ExerciseChart } from "../components/ExerciseChart";
 import { ExerciseForm } from "../components/ExerciseForm";
 import { ChevronLeftIcon } from "../components/icons";
+import { LazyExerciseChart } from "../components/LazyCharts";
 import { LoadError } from "../components/LoadError";
 import { Sheet } from "../components/Sheet";
 import { CATEGORY_LABELS, mediaKind } from "../exerciseUtils";
@@ -145,7 +145,7 @@ export function ExerciseDetail() {
             {loaded.progress === null ? (
               <p className="muted">No se pudo cargar la gráfica.</p>
             ) : (
-              <ExerciseChart sessions={loaded.progress.sessions} category={exercise.category} />
+              <LazyExerciseChart sessions={loaded.progress.sessions} category={exercise.category} />
             )}
           </section>
 

@@ -108,6 +108,8 @@ async function renderLoaded(id = "e-press") {
   const view = renderDetail(id);
   await screen.findByRole("heading", { level: 1 });
   await waitFor(() => expect(screen.queryByText("Cargando…")).toBeNull());
+  // La gráfica viaja en un trozo aparte (React.lazy): se espera a que llegue.
+  await waitFor(() => expect(screen.queryByText("Cargando gráfica…")).toBeNull());
   return view;
 }
 
