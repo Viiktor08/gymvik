@@ -10,6 +10,7 @@ import { NotificationsSection } from "../settings/NotificationsSection";
 import { PastWorkoutSection } from "../settings/PastWorkoutSection";
 import { ShortcutsSection } from "../settings/ShortcutsSection";
 import { ThemeSection } from "../settings/ThemeSection";
+import { TimezoneSection } from "../settings/TimezoneSection";
 import { WeightSection } from "../settings/WeightSection";
 import { applyTheme } from "../theme";
 import { useLoad } from "../useLoad";
@@ -45,6 +46,7 @@ export function Settings() {
         <>
           <ThemeSection key={`theme-${epoch}`} initial={state.data.theme} />
           <GoalsSection key={`goals-${epoch}`} initial={state.data} />
+          <TimezoneSection key={`timezone-${epoch}`} initial={state.data.timezone} />
           <ShortcutsSection key={`shortcuts-${epoch}`} shortcutName={state.data.shortcutName} />
           <NotificationsSection key={`notifications-${epoch}`} initial={state.data.notifications} />
         </>

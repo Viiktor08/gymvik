@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settingsPatchSchema } from "../../src/shared/schemas";
 import type { HookKey, NotificationType, Settings as UserSettings } from "../../src/shared/types";
 import { ApiError } from "../../src/web/api";
 import { Settings } from "../../src/web/screens/Settings";
 import { refreshSnapshot } from "../../src/web/session/offlineCache";
+import { timeZoneOptions } from "../../src/web/settings/TimezoneSection";
 import { THEMES } from "../../src/web/theme";
 
 // La copia sin conexión usa IndexedDB, que aquí no importa: solo se comprueba que se pide refrescarla.
@@ -287,6 +289,7 @@ describe("Ajustes: carga", () => {
       "Cuenta",
       "Tema",
       "Objetivos",
+      "Zona horaria",
       "Atajos y NFC",
       "Notificaciones",
       "Peso",
@@ -373,6 +376,79 @@ describe("Ajustes: objetivos", () => {
     fireEvent.click(within(goals).getByRole("button", { name: "Guardar objetivos" }));
     expect(text(await within(goals).findByRole("alert"))).toContain("entre 1 y 7");
     expect(calls("PATCH", "/api/settings")).toHaveLength(0);
+  });
+});
+
+describe("Ajustes: zona horaria", () => {
+  const zone = () => within(region("Zona horaria")).getByLabelText("Zona horaria") as HTMLSelectElement;
+  const optionValues = () => Array.from(zone().options).map((option) => option.value);
+
+  it("enseña un selector con la zona guardada (Europe/Madrid por defecto)", async () => {
+    await renderSettings();
+
+    expect(zone().value).toBe("Europe/Madrid");
+    expect(optionValues()).toContain("Europe/Madrid");
+    expect(optionValues()).toContain("Atlantic/Canary");
+    expect(text(region("Zona horaria"))).toContain("empieza cada día y cada semana");
+  });
+
+  it("guarda la zona elegida con PATCH y lo confirma", async () => {
+    await renderSettings();
+    const section = region("Zona horaria");
+    fireEvent.change(zone(), { target: { value: "Atlantic/Canary" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Guardar zona horaria" }));
+
+    expect(text(await within(section).findByRole("status"))).toContain("Zona horaria guardada.");
+    expect(calls("PATCH", "/api/settings").map((call) => call.body)).toEqual([{ timezone: "Atlantic/Canary" }]);
+    expect(zone().value).toBe("Atlantic/Canary");
+  });
+
+  it("si no se puede guardar lo dice y no da la zona por guardada", async () => {
+    server.fails.set("PATCH /api/settings", 500);
+    await renderSettings();
+    const section = region("Zona horaria");
+    fireEvent.change(zone(), { target: { value: "America/Mexico_City" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Guardar zona horaria" }));
+
+    expect(text(await within(section).findByRole("alert"))).toContain("Fallo simulado 500");
+    expect(within(section).queryByRole("status")).toBeNull();
+  });
+
+  it("una zona guardada que el navegador no lista sigue saliendo elegida", async () => {
+    server.settings = { ...server.settings, timezone: "UTC" };
+    await renderSettings();
+
+    expect(zone().value).toBe("UTC");
+    expect(optionValues().filter((value) => value === "UTC")).toHaveLength(1);
+  });
+
+  it("todas las zonas que ofrece las acepta el esquema de ajustes del servidor", async () => {
+    await renderSettings();
+
+    const rejected = optionValues().filter((timezone) => !settingsPatchSchema.safeParse({ timezone }).success);
+
+    expect(rejected).toEqual([]);
+    expect(optionValues().length).toBeGreaterThan(50);
+  });
+
+  it("si el navegador no sabe listar zonas, ofrece las más usuales y la guardada", () => {
+    const original = Object.getOwnPropertyDescriptor(Intl, "supportedValuesOf");
+    Object.defineProperty(Intl, "supportedValuesOf", { value: undefined, configurable: true });
+    try {
+      const options = timeZoneOptions("Asia/Tokyo");
+
+      expect(options[0]).toBe("Asia/Tokyo");
+      expect(options).toEqual(expect.arrayContaining(["Europe/Madrid", "Atlantic/Canary"]));
+      expect(timeZoneOptions("Europe/Madrid").filter((zone) => zone === "Europe/Madrid")).toHaveLength(1);
+    } finally {
+      if (original) Object.defineProperty(Intl, "supportedValuesOf", original);
+    }
+  });
+
+  it("no tiene dos opciones iguales", async () => {
+    await renderSettings();
+
+    expect(new Set(optionValues()).size).toBe(optionValues().length);
   });
 });
 
