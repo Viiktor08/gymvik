@@ -60,6 +60,15 @@ async function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
 
 export type EnableOutcome = "enabled" | "denied" | "dismissed";
 
+/** Anula una suscripción del navegador sin que un fallo de esa limpieza tape el motivo real de otro fallo. */
+async function unsubscribeQuietly(subscription: PushSubscription): Promise<void> {
+  try {
+    await subscription.unsubscribe();
+  } catch {
+    // Es limpieza: si no se puede, el siguiente intento de activar volverá a probar.
+  }
+}
+
 /**
  * Activa los avisos en este dispositivo: permiso → suscripción → servidor.
  * Hay que llamarla directamente desde el clic de un botón y sin esperar nada antes: iOS solo enseña el aviso
@@ -72,12 +81,24 @@ export async function enablePush(): Promise<EnableOutcome> {
 
   const registration = await serviceWorkerReady();
   const { publicKey } = await api<{ publicKey: string }>("/api/push/public-key");
+
+  // El navegador puede conservar una suscripción que el servidor ya no tiene (la borró al recibir un 404 o 410, o
+  // una activación anterior se quedó a medias). Mientras exista, `subscribe()` devuelve ese mismo endpoint muerto.
+  const stale = await registration.pushManager.getSubscription();
+  if (stale) await unsubscribeQuietly(stale);
+
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
-  // PushSubscription.toJSON() es justo lo que espera el servidor: { endpoint, keys: { p256dh, auth } }.
-  await api("/api/push/subscribe", { method: "POST", body: JSON.stringify(subscription) });
+  try {
+    // PushSubscription.toJSON() es justo lo que espera el servidor: { endpoint, keys: { p256dh, auth } }.
+    await api("/api/push/subscribe", { method: "POST", body: JSON.stringify(subscription) });
+  } catch (failure) {
+    // Si el servidor no la guarda, el navegador no debe quedarse con ella: al recargar daría los avisos por activados.
+    await unsubscribeQuietly(subscription);
+    throw failure;
+  }
   return "enabled";
 }
 

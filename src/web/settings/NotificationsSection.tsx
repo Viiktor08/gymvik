@@ -104,6 +104,8 @@ export function NotificationsSection({ initial }: { initial: Preferences }) {
       } else if (result.failed > 0) {
         setTestResult({ kind: "error", message: "No se pudo entregar el aviso. Inténtalo de nuevo dentro de un rato." });
       } else if (result.removed > 0) {
+        // El servidor ya no tiene la suscripción de este dispositivo: que vuelva el botón para activarlas otra vez.
+        setDevice("off");
         setTestResult({
           kind: "error",
           message: "La suscripción de este dispositivo había caducado y se ha quitado. Activa las notificaciones otra vez.",

@@ -184,14 +184,15 @@ type NotificationStub = {
 };
 let notification: NotificationStub;
 
-const subscription = {
-  endpoint: "https://push.example.test/abc",
-  toJSON: () => ({
-    endpoint: "https://push.example.test/abc",
-    expirationTime: null,
-    keys: { p256dh: "clave-p256dh", auth: "clave-auth" },
-  }),
-};
+function makeSubscription(endpoint: string) {
+  return {
+    endpoint,
+    unsubscribe: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    toJSON: () => ({ endpoint, expirationTime: null, keys: { p256dh: "clave-p256dh", auth: "clave-auth" } }),
+  };
+}
+
+let subscription = makeSubscription("https://push.example.test/abc");
 const pushManager = {
   subscribe: vi.fn<(options: PushSubscriptionOptionsInit) => Promise<typeof subscription>>(),
   getSubscription: vi.fn<() => Promise<typeof subscription | null>>(),
@@ -262,6 +263,7 @@ beforeEach(() => {
   webauthn.registerPasskey.mockReset();
   webauthn.registerPasskey.mockResolvedValue(undefined);
   vi.mocked(refreshSnapshot).mockClear();
+  subscription = makeSubscription("https://push.example.test/abc");
   pushManager.subscribe.mockReset();
   pushManager.subscribe.mockResolvedValue(subscription);
   pushManager.getSubscription.mockReset();
@@ -784,6 +786,66 @@ describe("Ajustes: notificaciones", () => {
     expect((within(notifications).getByRole("button", { name: "Activar notificaciones" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("si el servidor rechaza la suscripción, la del navegador se anula para no dejarla huérfana", async () => {
+    installPushSupport({ standalone: true });
+    server.fails.set("POST /api/push/subscribe", 400);
+    await renderSettings();
+    const notifications = region("Notificaciones");
+    fireEvent.click(await within(notifications).findByRole("button", { name: "Activar notificaciones" }));
+
+    expect(text(await within(notifications).findByRole("alert"))).toContain("Fallo simulado 400");
+    // Sin esto, al recargar el navegador diría "activadas" mientras el servidor no tiene ninguna fila.
+    expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("si anular la suscripción tras el fallo también falla, se sigue mostrando el error original", async () => {
+    installPushSupport({ standalone: true });
+    server.fails.set("POST /api/push/subscribe", 400);
+    subscription.unsubscribe.mockRejectedValue(new Error("no se pudo anular"));
+    await renderSettings();
+    const notifications = region("Notificaciones");
+    fireEvent.click(await within(notifications).findByRole("button", { name: "Activar notificaciones" }));
+
+    expect(text(await within(notifications).findByRole("alert"))).toContain("Fallo simulado 400");
+  });
+
+  it("antes de suscribir anula la suscripción que el navegador ya tuviera, para no reutilizar un endpoint viejo", async () => {
+    installPushSupport({ standalone: true });
+    await renderSettings();
+    const notifications = region("Notificaciones");
+    const button = await within(notifications).findByRole("button", { name: "Activar notificaciones" });
+    // El navegador conserva una suscripción que el servidor ya no tiene.
+    const stale = makeSubscription("https://push.example.test/vieja");
+    pushManager.getSubscription.mockResolvedValue(stale);
+    fireEvent.click(button);
+
+    expect(await within(notifications).findByText("Notificaciones activadas en este dispositivo.")).toBeTruthy();
+    expect(stale.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(stale.unsubscribe.mock.invocationCallOrder[0]).toBeLessThan(pushManager.subscribe.mock.invocationCallOrder[0] as number);
+    // El permiso se sigue pidiendo primero, dentro del clic.
+    expect(notification.requestPermission.mock.invocationCallOrder[0]).toBeLessThan(
+      stale.unsubscribe.mock.invocationCallOrder[0] as number,
+    );
+    expect(calls("POST", "/api/push/subscribe")[0]?.body).toEqual(subscription.toJSON());
+    // La suscripción nueva no se anula.
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it("si anular la suscripción vieja falla, se intenta suscribir igualmente", async () => {
+    installPushSupport({ standalone: true });
+    await renderSettings();
+    const notifications = region("Notificaciones");
+    const button = await within(notifications).findByRole("button", { name: "Activar notificaciones" });
+    const stale = makeSubscription("https://push.example.test/vieja");
+    stale.unsubscribe.mockRejectedValue(new Error("no se pudo anular"));
+    pushManager.getSubscription.mockResolvedValue(stale);
+    fireEvent.click(button);
+
+    expect(await within(notifications).findByText("Notificaciones activadas en este dispositivo.")).toBeTruthy();
+    expect(pushManager.subscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("muestra un interruptor y una hora por aviso, con lo que hay guardado", async () => {
     await renderSettings();
     const notifications = region("Notificaciones");
@@ -863,6 +925,27 @@ describe("Ajustes: notificaciones", () => {
     const notifications = region("Notificaciones");
     fireEvent.click(within(notifications).getByRole("button", { name: "Enviar aviso de prueba" }));
     expect(text(await within(notifications).findByRole("alert"))).toContain("caducado");
+  });
+
+  it("si el servidor quitó la suscripción de este dispositivo vuelve el botón para activarlas otra vez", async () => {
+    installPushSupport({ standalone: true });
+    notification.permission = "granted";
+    pushManager.getSubscription.mockResolvedValue(subscription);
+    server.testPush = { sent: 0, removed: 1, failed: 0 };
+    await renderSettings();
+    const notifications = region("Notificaciones");
+    await within(notifications).findByText("Notificaciones activadas en este dispositivo.");
+    expect(within(notifications).queryByRole("button", { name: "Activar notificaciones" })).toBeNull();
+
+    fireEvent.click(within(notifications).getByRole("button", { name: "Enviar aviso de prueba" }));
+    expect(text(await within(notifications).findByRole("alert"))).toContain("caducado");
+    expect(within(notifications).queryByText("Notificaciones activadas en este dispositivo.")).toBeNull();
+
+    // Y desde ahí se puede volver a activar: la suscripción vieja del navegador se anula y se crea otra.
+    fireEvent.click(within(notifications).getByRole("button", { name: "Activar notificaciones" }));
+    expect(await within(notifications).findByText("Notificaciones activadas en este dispositivo.")).toBeTruthy();
+    expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(calls("POST", "/api/push/subscribe")).toHaveLength(1);
   });
 });
 
