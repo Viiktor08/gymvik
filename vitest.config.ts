@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
@@ -13,6 +14,8 @@ function testVapidKeys(): { publicKey: string; privateKey: string } {
 }
 
 const vapid = testVapidKeys();
+
+const { version } = JSON.parse(readFileSync("./package.json", "utf8")) as { version: string };
 
 // Vitest 4+ ya no admite vitest.workspace.ts: los proyectos se declaran aquí.
 // Se mantiene separado de vite.config.ts para que los tests no arranquen el
@@ -47,6 +50,8 @@ export default defineConfig({
       {
         // JSX automático (el mismo que usa tsconfig.web.json) para poder probar componentes.
         oxc: { jsx: { runtime: "automatic" } },
+        // La misma constante que inyecta vite.config.ts.
+        define: { __APP_VERSION__: JSON.stringify(version) },
         test: {
           name: "web",
           environment: "jsdom",
