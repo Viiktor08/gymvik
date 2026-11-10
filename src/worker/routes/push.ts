@@ -42,7 +42,8 @@ export function pushRoutes(): Hono<{ Bindings: Env }> {
 
   // La clave pública VAPID, que el navegador necesita (`applicationServerKey`) para suscribirse.
   push.get("/public-key", (c) => {
-    if (c.env.VAPID_PUBLIC_KEY === "") {
+    // Un secreto sin definir llega como `undefined`, no como "": los dos son "sin configurar".
+    if (!c.env.VAPID_PUBLIC_KEY) {
       throw new HTTPException(503, { message: "Las notificaciones no están configuradas" });
     }
     return c.json({ publicKey: c.env.VAPID_PUBLIC_KEY });

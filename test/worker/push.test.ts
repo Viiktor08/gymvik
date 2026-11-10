@@ -214,6 +214,17 @@ describe("GET /api/push/public-key", () => {
     expect(await response.json()).toEqual({ error: "Las notificaciones no están configuradas" });
   });
 
+  it("si el secreto VAPID no existe del todo (sin definir), también responde 503, sin cuerpo con la clave", async () => {
+    const response = await createApp().request(
+      `${ORIGIN}/api/push/public-key`,
+      { headers: await authed() },
+      { ...env, VAPID_PUBLIC_KEY: undefined } as unknown as typeof env,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Las notificaciones no están configuradas" });
+  });
+
   it("exige sesión", async () => {
     const response = await exports.default.fetch(`${ORIGIN}/api/push/public-key`);
 
