@@ -182,10 +182,17 @@ a {
 .button {
   min-height: 48px;
   padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
+  color: var(--text);
   font-weight: 600;
+  text-align: center;
+  /* También se usa en enlaces (<a>, <Link>) que parecen botones. */
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -369,4 +376,299 @@ a {
   .sheet {
     animation: none;
   }
+}
+
+/* --- Hoy --- */
+
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+
+.today-head h1 {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.today-head p {
+  margin: 0;
+}
+
+.streak {
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 0.875rem;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.banner .button {
+  min-height: 44px;
+  flex: none;
+}
+
+/* --- Tarjetas --- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.card > p,
+.card > h2,
+.card > ul {
+  margin: 0;
+}
+
+.card .button {
+  margin-top: auto;
+  /* Dos tarjetas por fila: con el relleno de un botón suelto "Apuntar peso" no cabe en una línea. */
+  padding: 0 12px;
+  line-height: 1.2;
+}
+
+.card-hero {
+  /* Barra de acento a la izquierda: la tarjeta principal de la pantalla. */
+  box-shadow: inset 4px 0 0 var(--accent);
+  padding-left: 20px;
+}
+
+.card-hero h2 {
+  font-size: 1.375rem;
+  line-height: 1.2;
+}
+
+.card-eyebrow {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.card-title {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-row h2 {
+  margin: 0;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+
+.card-actions .button {
+  margin-top: 0;
+}
+
+.link-quiet {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.metric .muted {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--border);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.exercise-list {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exercise-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.exercise-list .muted {
+  flex: none;
+  white-space: nowrap;
+}
+
+.card-button {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-done {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.card-button-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.check-circle {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+}
+
+.check-circle .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.card-done .check-circle {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.creatine .form-error {
+  margin-top: 8px;
+}
+
+.week-count {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.week-dot {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+}
+
+.week-dot .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.week-day-done .week-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.week-initial {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* Hoy: el círculo con el acento y la inicial en el color del texto. */
+.week-day[aria-current="date"] .week-dot {
+  border-color: var(--accent);
+}
+
+.week-day[aria-current="date"] .week-initial {
+  color: var(--text);
+}
+
+.week-met {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.field {
+  margin-bottom: 16px;
 }
