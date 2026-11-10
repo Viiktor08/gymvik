@@ -2,7 +2,7 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { NEW_REPS_TARGET, NEW_REST_SECONDS } from "../../shared/routineDiff";
 import type { Exercise, Routine } from "../../shared/types";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, CloseIcon, PlusIcon } from "../components/icons";
 import { ExercisePicker } from "../components/ExercisePicker";
 import { LoadError } from "../components/LoadError";
@@ -102,6 +102,9 @@ function RoutineForm({ routine, routines, names }: FormProps) {
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const switchLabelId = useId();
   const switchHintId = useId();
 
@@ -141,7 +144,7 @@ function RoutineForm({ routine, routines, names }: FormProps) {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || archiving) return;
     const problem = validate(name, rows, nameOf);
     if (problem !== null) {
       setError(problem);
@@ -181,6 +184,30 @@ function RoutineForm({ routine, routines, names }: FormProps) {
       setError(failureMessage(failure, "No se pudo guardar la rutina"));
       setSaving(false);
     }
+  }
+
+  async function archive() {
+    if (routine === null || archiving) return;
+    setArchiving(true);
+    setArchiveError(null);
+    try {
+      await api(`/api/routines/${encodeURIComponent(routine.id)}`, { method: "DELETE" });
+    } catch (failure) {
+      // Un 404 es que ya no existe (se archivó desde otro sitio): el resultado es el que se quería.
+      if (!(failure instanceof ApiError && failure.status === 404)) {
+        setArchiveError(failureMessage(failure, "No se pudo archivar la rutina"));
+        setArchiving(false);
+        return;
+      }
+    }
+    // La rutina deja de existir para las listas: volver atrás a su editor no tiene sentido.
+    navigate("/entreno", { replace: true });
+  }
+
+  function closeArchiveConfirmation() {
+    if (archiving) return;
+    setConfirmingArchive(false);
+    setArchiveError(null);
   }
 
   return (
@@ -307,11 +334,41 @@ function RoutineForm({ routine, routines, names }: FormProps) {
           </p>
         ) : null}
         <div className="actions">
-          <button type="submit" className="button button-primary" disabled={saving}>
+          <button type="submit" className="button button-primary" disabled={saving || archiving}>
             Guardar
           </button>
+          {routine !== null ? (
+            <button
+              type="button"
+              className="button button-danger"
+              disabled={saving}
+              onClick={() => setConfirmingArchive(true)}
+            >
+              Archivar rutina
+            </button>
+          ) : null}
         </div>
       </form>
+
+      <Sheet open={confirmingArchive} title="¿Archivar esta rutina?" onClose={closeArchiveConfirmation}>
+        <p>
+          La rutina desaparecerá de las listas y de la rotación, pero el historial se conserva: tus entrenos anteriores
+          seguirán ahí.
+        </p>
+        {archiveError ? (
+          <p role="alert" className="form-error">
+            {archiveError}
+          </p>
+        ) : null}
+        <div className="actions">
+          <button type="button" className="button button-danger" disabled={archiving} onClick={() => void archive()}>
+            Sí, archivar
+          </button>
+          <button type="button" className="button" disabled={archiving} onClick={closeArchiveConfirmation}>
+            Cancelar
+          </button>
+        </div>
+      </Sheet>
 
       <Sheet open={picking} title="Añadir ejercicio" onClose={() => setPicking(false)}>
         <ExercisePicker onPick={add} />

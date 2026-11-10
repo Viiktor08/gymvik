@@ -55,6 +55,7 @@ const server = {
   routinesFail: null as "offline" | 500 | null,
   exercisesFail: false,
   saveStatus: 200,
+  archiveStatus: 200,
   calls: [] as Call[],
 };
 
@@ -89,6 +90,9 @@ async function handle(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path.startsWith("/api/routines/") && method === "PUT") {
     return server.saveStatus === 200 ? json(200, body) : json(server.saveStatus, { error: "Fallo simulado" });
+  }
+  if (path.startsWith("/api/routines/") && method === "DELETE") {
+    return server.archiveStatus === 200 ? json(200, { archived: true }) : json(server.archiveStatus, { error: "Fallo simulado" });
   }
   return json(404, { error: "No encontrado" });
 }
@@ -133,6 +137,7 @@ beforeEach(() => {
   server.routinesFail = null;
   server.exercisesFail = false;
   server.saveStatus = 200;
+  server.archiveStatus = 200;
   server.calls = [];
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
@@ -348,6 +353,116 @@ describe("Editor de rutina: validación y errores", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("Sin conexión");
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await screen.findByText("Pantalla Entreno");
+  });
+});
+
+describe("Editor de rutina: archivar", () => {
+  const TITLE = "¿Archivar esta rutina?";
+
+  async function openConfirmation() {
+    fireEvent.click(screen.getByRole("button", { name: "Archivar rutina" }));
+    return screen.findByRole("dialog", { name: TITLE });
+  }
+
+  it("pide confirmación, explica lo que pasa y cancelar no llama a la API", async () => {
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    const dialog = await openConfirmation();
+    expect(dialog.textContent).toContain("desaparecerá de las listas");
+    expect(dialog.textContent).toContain("el historial se conserva");
+    expect(callsTo("DELETE", "/api/routines/r-pecho")).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(callsTo("DELETE", "/api/routines/r-pecho")).toHaveLength(0);
+    expect(screen.queryByText("Pantalla Entreno")).toBeNull();
+    expect(names()).toEqual(["Press banca", "Fondos"]);
+  });
+
+  it("al confirmar envía el DELETE de esa rutina y vuelve a Entreno", async () => {
+    await renderLoaded("/entreno/rutina/r-espalda");
+
+    const dialog = await openConfirmation();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+    expect(callsTo("DELETE", "/api/routines/r-espalda")).toEqual([
+      { method: "DELETE", path: "/api/routines/r-espalda", body: undefined },
+    ]);
+    expect(server.calls.filter((call) => call.method === "DELETE")).toHaveLength(1);
+    expect(server.calls.filter((call) => call.method === "PUT" || call.method === "POST")).toHaveLength(0);
+  });
+
+  it("no aparece al crear una rutina nueva", async () => {
+    await renderLoaded("/entreno/rutina/nueva");
+
+    expect(screen.queryByRole("button", { name: "Archivar rutina" })).toBeNull();
+  });
+
+  it("si el servidor falla, enseña su mensaje en la confirmación y se puede reintentar", async () => {
+    server.archiveStatus = 500;
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    const dialog = await openConfirmation();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Fallo simulado");
+    expect(screen.queryByText("Pantalla Entreno")).toBeNull();
+    const retry = within(dialog).getByRole("button", { name: "Sí, archivar" }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+
+    server.archiveStatus = 200;
+    fireEvent.click(retry);
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+    expect(callsTo("DELETE", "/api/routines/r-pecho")).toHaveLength(2);
+  });
+
+  it("sin conexión lo dice y se puede reintentar", async () => {
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    const dialog = await openConfirmation();
+    fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError("Failed to fetch")));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Sin conexión");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+  });
+
+  it("un 404 cuenta como ya archivada y vuelve a Entreno", async () => {
+    server.archiveStatus = 404;
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    const dialog = await openConfirmation();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+  });
+
+  it("un doble toque en Sí, archivar envía una sola petición", async () => {
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    const dialog = await openConfirmation();
+    const confirm = within(dialog).getByRole("button", { name: "Sí, archivar" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await screen.findByText("Pantalla Entreno");
+    expect(callsTo("DELETE", "/api/routines/r-pecho")).toHaveLength(1);
+  });
+
+  it("mientras archiva no se puede cancelar ni guardar", async () => {
+    await renderLoaded("/entreno/rutina/r-pecho");
+    const dialog = await openConfirmation();
+    let release: (response: Response) => void = () => undefined;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => (release = resolve)));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+
+    await waitFor(() => expect((within(dialog).getByRole("button", { name: "Cancelar" }) as HTMLButtonElement).disabled).toBe(true));
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(true);
+    release(json(200, { archived: true }));
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
   });
 });
 

@@ -86,7 +86,7 @@ Navegación inferior: **Hoy · Entreno · Progreso**. Ajustes con icono arriba a
 
 **Rotación:** las rutinas son plantillas reutilizables. Las marcadas "en rotación" tienen un orden; "te toca" es la siguiente a la **última rutina en rotación que se completó**, de forma circular. Hacer una rutina fuera de orden, una que no rota o un entreno libre no rompe la rotación: solo cuenta el último entreno de una rutina que siga en rotación. Sin historial, toca la primera.
 
-**Editor de rutina:** nombre, interruptor "En rotación", y ejercicios con series, objetivo de repeticiones (texto libre, por ejemplo "8-10") y descanso en segundos. Se reordenan (subir/bajar), se quitan y se añaden desde la biblioteca con buscador.
+**Editor de rutina:** nombre, interruptor "En rotación", y ejercicios con series, objetivo de repeticiones (texto libre, por ejemplo "8-10") y descanso en segundos. Se reordenan (subir/bajar), se quitan y se añaden desde la biblioteca con buscador. Una rutina existente se puede **archivar** desde su editor (con confirmación): desaparece de las listas y de la rotación, y el historial se conserva.
 
 ### 5.3 Sesión en directo
 - Cabecera: cronómetro total, botón **Terminar** y menú con **Descartar** (con confirmación).
