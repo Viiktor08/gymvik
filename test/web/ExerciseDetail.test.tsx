@@ -6,6 +6,15 @@ import { NBSP } from "../../src/web/format";
 import type { ExerciseHistoryEntry, ExerciseProgress } from "../../src/web/progressData";
 import { ExerciseDetail } from "../../src/web/screens/ExerciseDetail";
 
+
+const snapshot = vi.hoisted(() => ({ refresh: vi.fn<() => Promise<void>>() }));
+
+// La copia sin conexión se refresca en segundo plano tras cambiar rutinas o ejercicios.
+vi.mock("../../src/web/session/offlineCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/web/session/offlineCache")>()),
+  refreshSnapshot: snapshot.refresh,
+}));
+
 const PRESS: Exercise = {
   id: "e-press",
   name: "Press banca",
@@ -123,6 +132,8 @@ beforeEach(() => {
   server.patchStatus = 200;
   server.deleteStatus = 200;
   server.calls = [];
+  snapshot.refresh.mockReset();
+  snapshot.refresh.mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
   vi.stubGlobal("fetch", fetchMock);
@@ -348,6 +359,24 @@ describe("Ficha: editar", () => {
     expect(screen.queryByRole("img", { name: /Imagen de/ })).toBeNull();
   });
 
+  it("al guardar los cambios refresca la copia sin conexión", async () => {
+    const dialog = await openEdit();
+    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "Press plano" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("si el servidor rechaza la edición no se refresca la copia", async () => {
+    server.patchStatus = 500;
+    const dialog = await openEdit();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    await within(dialog).findByRole("alert");
+
+    expect(snapshot.refresh).not.toHaveBeenCalled();
+  });
+
   it("sin nombre no envía nada", async () => {
     const dialog = await openEdit();
     fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: " " } });
@@ -397,11 +426,21 @@ describe("Ficha: archivar", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Press banca");
   });
 
-  it("al confirmar envía DELETE y vuelve a la biblioteca", async () => {
+  it("al confirmar envía DELETE, refresca la copia sin conexión y vuelve a la biblioteca", async () => {
     const dialog = await openConfirm();
     fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
     expect(await screen.findByText("Pantalla Biblioteca")).toBeTruthy();
     expect(callsTo("DELETE", "/api/exercises/e-press")).toHaveLength(1);
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("si archivar falla no se refresca la copia", async () => {
+    const dialog = await openConfirm();
+    server.deleteStatus = 500;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sí, archivar" }));
+    await within(dialog).findByRole("alert");
+
+    expect(snapshot.refresh).not.toHaveBeenCalled();
   });
 
   it("si el servidor falla, avisa, no sale de la ficha y se puede reintentar", async () => {

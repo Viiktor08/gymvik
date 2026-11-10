@@ -8,6 +8,7 @@ import { ExercisePicker } from "../components/ExercisePicker";
 import { LoadError } from "../components/LoadError";
 import { NumberInput } from "../components/NumberInput";
 import { Sheet } from "../components/Sheet";
+import { refreshSnapshotInBackground } from "../session/sync";
 import { failureMessage, useLoad } from "../useLoad";
 
 /** Series de un ejercicio recién añadido; repeticiones y descanso son los mismos que al guardar una sesión. */
@@ -179,6 +180,8 @@ function RoutineForm({ routine, routines, names }: FormProps) {
           body: JSON.stringify({ id: routine.id, ...body }),
         });
       }
+      // Sin cobertura en el gimnasio solo hay lo que está guardado en el móvil: que lo nuevo ya esté ahí.
+      refreshSnapshotInBackground();
       navigate("/entreno");
     } catch (failure) {
       setError(failureMessage(failure, "No se pudo guardar la rutina"));
@@ -201,6 +204,7 @@ function RoutineForm({ routine, routines, names }: FormProps) {
       }
     }
     // La rutina deja de existir para las listas: volver atrás a su editor no tiene sentido.
+    refreshSnapshotInBackground();
     navigate("/entreno", { replace: true });
   }
 

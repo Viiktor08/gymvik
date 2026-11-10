@@ -5,6 +5,7 @@ import { api, apiWithin } from "../api";
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon } from "../components/icons";
 import { LoadError } from "../components/LoadError";
 import { LOAD_TIMEOUT_MS, loadRoutines } from "../session/offlineData";
+import { refreshSnapshotInBackground } from "../session/sync";
 import type { TodayData } from "../todayData";
 import { failureMessage, useLoad } from "../useLoad";
 
@@ -108,6 +109,8 @@ export function Workouts() {
     setMoveError(null);
     try {
       const routines = await api<Routine[]>("/api/routines/reorder", { method: "POST", body: JSON.stringify({ ids }) });
+      // "Te toca" sin conexión sale de la copia del móvil: tiene que seguir el orden nuevo.
+      refreshSnapshotInBackground();
       // "Te toca" depende del orden de la rotación: se vuelve a pedir a Hoy y se cambia todo a la vez, sin pantalla de carga.
       // Si Hoy no responde no se deja la etiqueta de antes (sería la de otra rutina): se quita hasta recargar.
       setData({ routines, fromCache: false, nextId: await fetchNextId() });

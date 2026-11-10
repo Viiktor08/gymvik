@@ -11,6 +11,7 @@ import { Sheet } from "../components/Sheet";
 import { CATEGORY_LABELS, mediaKind } from "../exerciseUtils";
 import { formatMediumDate } from "../format";
 import type { ExerciseHistoryEntry, ExerciseProgress } from "../progressData";
+import { refreshSnapshotInBackground } from "../session/sync";
 import { failureMessage, useLoad } from "../useLoad";
 
 type Loaded = {
@@ -65,6 +66,8 @@ export function ExerciseDetail() {
     try {
       // Si algún entreno o rutina lo usa, el servidor lo archiva; si no, lo borra. Para el usuario es lo mismo.
       await api(`/api/exercises/${encodeURIComponent(id)}`, { method: "DELETE" });
+      // El selector de ejercicios sin conexión sale de la copia guardada en el móvil: que no ofrezca el archivado.
+      refreshSnapshotInBackground();
       navigate("/entreno/biblioteca");
     } catch (failure) {
       setArchiveError(failureMessage(failure, "No se pudo archivar el ejercicio"));

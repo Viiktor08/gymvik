@@ -7,6 +7,15 @@ import type { Routine } from "../../src/shared/types";
 import { Workouts } from "../../src/web/screens/Workouts";
 import { saveSnapshot } from "../../src/web/session/offlineCache";
 
+
+const snapshot = vi.hoisted(() => ({ refresh: vi.fn<() => Promise<void>>() }));
+
+// La copia sin conexión se refresca en segundo plano tras cambiar rutinas o ejercicios.
+vi.mock("../../src/web/session/offlineCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/web/session/offlineCache")>()),
+  refreshSnapshot: snapshot.refresh,
+}));
+
 function routine(id: string, name: string, extra: Partial<Routine> = {}): Routine {
   return {
     id,
@@ -116,6 +125,8 @@ beforeEach(() => {
   server.todayFails = false;
   server.reorderStatus = 200;
   server.calls = [];
+  snapshot.refresh.mockReset();
+  snapshot.refresh.mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
   vi.stubGlobal("fetch", fetchMock);
@@ -281,6 +292,30 @@ describe("Entreno: reordenar la rotación", () => {
     await waitFor(() => expect(routinesIn("En rotación")).toEqual(["Pecho", "Pierna", "Espalda"]));
     await waitFor(() => expect(screen.queryByText("SIGUIENTE")).toBeNull());
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("tras reordenar refresca la copia sin conexión: sin cobertura, 'te toca' sigue el orden nuevo", async () => {
+    const seen: number[] = [];
+    snapshot.refresh.mockImplementation(async () => {
+      seen.push(reorderCalls().length);
+    });
+    await renderLoaded();
+    expect(snapshot.refresh).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Bajar Pecho" }));
+    await waitFor(() => expect(routinesIn("En rotación")).toEqual(["Espalda", "Pecho", "Pierna"]));
+
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([1]);
+  });
+
+  it("si reordenar falla no se refresca la copia", async () => {
+    await renderLoaded();
+    server.reorderStatus = 500;
+    fireEvent.click(screen.getByRole("button", { name: "Bajar Pecho" }));
+    await screen.findByRole("alert");
+
+    expect(snapshot.refresh).not.toHaveBeenCalled();
   });
 
   it("si el servidor falla, avisa y deja el orden como estaba", async () => {

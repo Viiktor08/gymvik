@@ -4,6 +4,15 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { Category, Exercise, Routine } from "../../src/shared/types";
 import { RoutineEditor } from "../../src/web/screens/RoutineEditor";
 
+
+const snapshot = vi.hoisted(() => ({ refresh: vi.fn<() => Promise<void>>() }));
+
+// La copia sin conexión se refresca en segundo plano tras cambiar rutinas o ejercicios.
+vi.mock("../../src/web/session/offlineCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/web/session/offlineCache")>()),
+  refreshSnapshot: snapshot.refresh,
+}));
+
 function exercise(id: string, name: string, extra: Partial<Exercise> = {}): Exercise {
   const category: Category = "strength";
   return { id, name, category, muscle: "", description: "", mediaUrl: null, isCustom: false, archived: false, ...extra };
@@ -139,6 +148,8 @@ beforeEach(() => {
   server.saveStatus = 200;
   server.archiveStatus = 200;
   server.calls = [];
+  snapshot.refresh.mockReset();
+  snapshot.refresh.mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
   vi.stubGlobal("fetch", fetchMock);
@@ -531,5 +542,87 @@ describe("Editor de rutina: carga y selector", () => {
   it("no muestra Infinity ni NaN", async () => {
     await renderLoaded("/entreno/rutina/r-pecho");
     expect(document.body.textContent).not.toMatch(/Infinity|NaN/);
+  });
+});
+
+describe("Editor de rutina: copia sin conexión", () => {
+  /** Qué peticiones de escritura había ya hechas cada vez que se refrescó la copia. */
+  function writesSeenOnRefresh(): number[] {
+    const seen: number[] = [];
+    snapshot.refresh.mockImplementation(async () => {
+      seen.push(server.calls.filter((call) => call.method !== "GET").length);
+    });
+    return seen;
+  }
+
+  it("guardar cambios de una rutina refresca la copia, después de guardar", async () => {
+    const seen = writesSeenOnRefresh();
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Pantalla Entreno");
+
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([1]);
+  });
+
+  it("crear una rutina nueva refresca la copia", async () => {
+    server.saveStatus = 201;
+    await renderLoaded("/entreno/rutina/nueva");
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Hombros" } });
+    await addFromPicker(/^Dominadas/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("Pantalla Entreno");
+
+    expect(callsTo("POST", "/api/routines")).toHaveLength(1);
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("archivar una rutina refresca la copia, también si ya estaba archivada (404)", async () => {
+    for (const status of [200, 404]) {
+      snapshot.refresh.mockClear();
+      server.archiveStatus = status;
+      const view = await renderLoaded("/entreno/rutina/r-pecho");
+      fireEvent.click(screen.getByRole("button", { name: "Archivar rutina" }));
+      fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sí, archivar" }));
+      await screen.findByText("Pantalla Entreno");
+
+      expect(snapshot.refresh, `DELETE ${status}`).toHaveBeenCalledTimes(1);
+      view.unmount();
+    }
+  });
+
+  it("si el guardado o el archivado fallan no se refresca nada: no ha cambiado nada", async () => {
+    server.saveStatus = 500;
+    server.archiveStatus = 500;
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Archivar rutina" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sí, archivar" }));
+    await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(1));
+
+    expect(snapshot.refresh).not.toHaveBeenCalled();
+  });
+
+  it("no bloquea: aunque el refresco no termine nunca, se vuelve a Entreno", async () => {
+    snapshot.refresh.mockReturnValue(new Promise(() => undefined));
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+  });
+
+  it("si el refresco falla se ignora: se vuelve a Entreno sin avisos", async () => {
+    snapshot.refresh.mockRejectedValue(new Error("Sin conexión"));
+    await renderLoaded("/entreno/rutina/r-pecho");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Pantalla Entreno")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

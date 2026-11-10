@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Category, Exercise } from "../../shared/types";
 import { api } from "../api";
 import { CATEGORIES, CATEGORY_LABELS } from "../exerciseUtils";
+import { refreshSnapshotInBackground } from "../session/sync";
 import { failureMessage } from "../useLoad";
 
 type Props = {
@@ -51,6 +52,8 @@ export function ExerciseForm({ exercise, onSaved }: Props) {
               method: "PATCH",
               body: JSON.stringify(body),
             });
+      // Un ejercicio nuevo o editado tiene que estar en la copia sin conexión para poder usarlo sin cobertura.
+      refreshSnapshotInBackground();
       onSaved(saved);
     } catch (failure) {
       setError(failureMessage(failure, "No se pudo guardar el ejercicio"));

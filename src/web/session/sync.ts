@@ -1,6 +1,6 @@
 import type { RecordKind } from "../../shared/records";
 import { flushOutbox, type OutboxItem, type SendResult } from "./outbox";
-import { refreshSnapshot } from "./offlineCache";
+import { loadSnapshot, refreshSnapshot } from "./offlineCache";
 
 export type NewRecord = { exerciseId: string; kind: RecordKind; value: number };
 
@@ -102,18 +102,49 @@ export function syncOutbox(): Promise<number> {
 }
 
 /**
+ * Vuelve a guardar la copia sin conexión (rutinas, ejercicios y última vez) sin esperarla y sin molestar: se
+ * llama tras cambiar rutinas o ejercicios para que lo nuevo ya esté en el móvil si luego no hay cobertura. Un
+ * fallo (sin red, sin IndexedDB) se deja para la próxima ocasión: el cambio ya está guardado en el servidor.
+ */
+export function refreshSnapshotInBackground(): void {
+  void refreshSnapshot().catch(() => undefined);
+}
+
+/** Al volver a la app desde segundo plano, la copia sin conexión se refresca si tiene más de esto. */
+export const FOREGROUND_REFRESH_MS = 5 * 60_000;
+
+async function snapshotIsStale(): Promise<boolean> {
+  const snapshot = await loadSnapshot();
+  return snapshot === null || !(Date.now() - Date.parse(snapshot.savedAt) < FOREGROUND_REFRESH_MS);
+}
+
+/**
  * Mantiene la app al día sin que nadie lo pida: al abrirla envía lo pendiente y refresca la instantánea sin
  * conexión; al volver la red hace lo mismo, y al volver a la app desde segundo plano (donde `online` no
- * siempre llega) reintenta el envío. Devuelve la función que lo para.
+ * siempre llega) reintenta el envío y refresca la copia si tiene más de `FOREGROUND_REFRESH_MS` (así lo que se
+ * cambió desde otro dispositivo llega al móvil sin depender de abrir la app de cero). Devuelve la función que
+ * lo para.
  */
 export function startBackgroundSync(): () => void {
   let active = true;
+  // Varios avisos de "vuelvo a la app" seguidos no deben lanzar varios refrescos a la vez.
+  let refreshing = false;
+
+  async function refreshOnce() {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      await refreshSnapshot();
+    } finally {
+      refreshing = false;
+    }
+  }
 
   async function run(refresh: boolean) {
     try {
       const sent = await syncOutbox();
       // Lo que se acaba de enviar cambia "la última vez" de los ejercicios.
-      if (active && (refresh || sent > 0)) await refreshSnapshot();
+      if (active && (refresh || sent > 0 || (await snapshotIsStale()))) await refreshOnce();
     } catch {
       // Sin red o sin IndexedDB: se vuelve a intentar en la próxima ocasión.
     }

@@ -4,6 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Category, Exercise } from "../../src/shared/types";
 import { Library } from "../../src/web/screens/Library";
 
+
+const snapshot = vi.hoisted(() => ({ refresh: vi.fn<() => Promise<void>>() }));
+
+// La copia sin conexión se refresca en segundo plano tras cambiar rutinas o ejercicios.
+vi.mock("../../src/web/session/offlineCache", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/web/session/offlineCache")>()),
+  refreshSnapshot: snapshot.refresh,
+}));
+
 function exercise(id: string, name: string, extra: Partial<Exercise> = {}): Exercise {
   const category: Category = "strength";
   return { id, name, category, muscle: "", description: "", mediaUrl: null, isCustom: false, archived: false, ...extra };
@@ -90,6 +99,8 @@ beforeEach(() => {
   server.listFail = null;
   server.createStatus = 201;
   server.calls = [];
+  snapshot.refresh.mockReset();
+  snapshot.refresh.mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockImplementation(handle);
   vi.stubGlobal("fetch", fetchMock);
@@ -213,6 +224,27 @@ describe("Biblioteca: crear ejercicio", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
     expect((await within(dialog).findByRole("alert")).textContent).toMatch(/nombre/i);
     expect(callsTo("POST", "/api/exercises")).toHaveLength(0);
+    expect(snapshot.refresh).not.toHaveBeenCalled();
+  });
+
+  it("al crear un ejercicio refresca la copia sin conexión, y sin bloquear la ficha", async () => {
+    snapshot.refresh.mockReturnValue(new Promise(() => undefined));
+    const dialog = await openForm();
+    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "Saltos" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Ficha de prueba")).toBeTruthy();
+    expect(snapshot.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("si el servidor rechaza el ejercicio no se refresca la copia", async () => {
+    const dialog = await openForm();
+    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "Saltos" } });
+    server.createStatus = 400;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+    await within(dialog).findByRole("alert");
+
+    expect(snapshot.refresh).not.toHaveBeenCalled();
   });
 
   it("un enlace que no es https no se envía", async () => {

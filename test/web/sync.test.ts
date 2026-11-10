@@ -3,8 +3,15 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workout } from "../../src/shared/types";
 import { enqueue, enqueueApply, isQueued, pendingCount } from "../../src/web/session/outbox";
-import { loadSnapshot } from "../../src/web/session/offlineCache";
-import { sendOutboxItem, startBackgroundSync, syncOutbox, takeWorkoutResult } from "../../src/web/session/sync";
+import { loadSnapshot, saveSnapshot } from "../../src/web/session/offlineCache";
+import {
+  FOREGROUND_REFRESH_MS,
+  refreshSnapshotInBackground,
+  sendOutboxItem,
+  startBackgroundSync,
+  syncOutbox,
+  takeWorkoutResult,
+} from "../../src/web/session/sync";
 
 function workout(id: string): Workout {
   return {
@@ -213,6 +220,84 @@ describe("startBackgroundSync", () => {
     stop();
   });
 
+  describe("la copia sin conexión al volver a la app", () => {
+    const routineReads = () => server.calls.filter((call) => call.method === "GET" && call.path === "/api/routines");
+
+    async function ageSnapshot(msAgo: number) {
+      const snapshot = await loadSnapshot();
+      if (snapshot === null) throw new Error("no hay copia");
+      await saveSnapshot({ ...snapshot, savedAt: new Date(Date.now() - msAgo).toISOString() });
+    }
+
+    async function started() {
+      const stop = startBackgroundSync();
+      await vi.waitFor(async () => expect(await loadSnapshot()).not.toBeNull());
+      await vi.waitFor(() => expect(routineReads()).toHaveLength(1));
+      return stop;
+    }
+
+    it("la refresca si la copia tiene más de unos minutos", async () => {
+      const stop = await started();
+      await ageSnapshot(FOREGROUND_REFRESH_MS + 60_000);
+
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      await vi.waitFor(() => expect(routineReads()).toHaveLength(2));
+      await vi.waitFor(async () => {
+        const saved = Date.parse((await loadSnapshot())?.savedAt ?? "");
+        expect(Date.now() - saved).toBeLessThan(FOREGROUND_REFRESH_MS);
+      });
+      stop();
+    });
+
+    it("no la refresca si es reciente: como mucho una vez cada pocos minutos", async () => {
+      const stop = await started();
+      await ageSnapshot(FOREGROUND_REFRESH_MS - 60_000);
+
+      for (let i = 0; i < 3; i += 1) document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      stop();
+
+      expect(routineReads()).toHaveLength(1);
+    });
+
+    it("varios avisos seguidos de que la app vuelve no lanzan varios refrescos a la vez", async () => {
+      const stop = await started();
+      await ageSnapshot(FOREGROUND_REFRESH_MS + 60_000);
+
+      for (let i = 0; i < 3; i += 1) document.dispatchEvent(new Event("visibilitychange"));
+      await vi.waitFor(() => expect(routineReads().length).toBeGreaterThanOrEqual(2));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      stop();
+
+      expect(routineReads()).toHaveLength(2);
+    });
+
+    it("sin copia guardada la crea al volver", async () => {
+      server.offline = true;
+      const stop = startBackgroundSync();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(await loadSnapshot()).toBeNull();
+
+      server.offline = false;
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      await vi.waitFor(async () => expect(await loadSnapshot()).not.toBeNull());
+      stop();
+    });
+
+    it("al parar ya no refresca al volver", async () => {
+      const stop = await started();
+      await ageSnapshot(FOREGROUND_REFRESH_MS + 60_000);
+      stop();
+
+      document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(routineReads()).toHaveLength(1);
+    });
+  });
+
   it("una vez parado ya no reacciona", async () => {
     const stop = startBackgroundSync();
     await vi.waitFor(async () => expect(await loadSnapshot()).not.toBeNull());
@@ -223,5 +308,23 @@ describe("startBackgroundSync", () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     expect(await pendingCount()).toBe(1);
+  });
+});
+
+describe("refreshSnapshotInBackground", () => {
+  it("guarda la copia sin esperar y sin lanzar", async () => {
+    refreshSnapshotInBackground();
+
+    await vi.waitFor(async () => expect(await loadSnapshot()).not.toBeNull());
+  });
+
+  it("si falla (sin red) no lanza ni deja un rechazo sin atender", async () => {
+    server.offline = true;
+
+    expect(() => refreshSnapshotInBackground()).not.toThrow();
+    // Un rechazo sin atender haría fallar la ejecución de Vitest, así que basta con dejar pasar el fallo.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(await loadSnapshot()).toBeNull();
   });
 });
