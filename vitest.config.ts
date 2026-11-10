@@ -45,10 +45,13 @@ export default defineConfig({
         },
       },
       {
+        // JSX automático (el mismo que usa tsconfig.web.json) para poder probar componentes.
+        oxc: { jsx: { runtime: "automatic" } },
         test: {
           name: "web",
           environment: "jsdom",
           include: ["test/shared/**/*.test.{ts,tsx}", "test/web/**/*.test.{ts,tsx}"],
+          setupFiles: ["./test/web/setup.ts"],
         },
       },
     ],
