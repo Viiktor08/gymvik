@@ -70,3 +70,43 @@ export function CheckIcon() {
     </Icon>
   );
 }
+
+export function ArrowUpIcon() {
+  return (
+    <Icon>
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </Icon>
+  );
+}
+
+export function ArrowDownIcon() {
+  return (
+    <Icon>
+      <path d="M12 5v14M6 13l6 6 6-6" />
+    </Icon>
+  );
+}
+
+export function PlusIcon() {
+  return (
+    <Icon>
+      <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
+
+export function ChevronLeftIcon() {
+  return (
+    <Icon>
+      <path d="M15 5l-7 7 7 7" />
+    </Icon>
+  );
+}
+
+export function ChevronRightIcon() {
+  return (
+    <Icon>
+      <path d="M9 5l7 7-7 7" />
+    </Icon>
+  );
+}

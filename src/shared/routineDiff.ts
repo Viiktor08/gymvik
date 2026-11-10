@@ -5,8 +5,8 @@ import type { Routine, RoutineItem } from "./types";
 type SessionExercise = { exerciseId: string; sets: unknown[] };
 
 // Valores de un ejercicio nuevo en la rutina; los de los que ya estaban se conservan.
-const NEW_REPS_TARGET = "10";
-const NEW_REST_SECONDS = 90;
+export const NEW_REPS_TARGET = "10";
+export const NEW_REST_SECONDS = 90;
 
 function orderedItems(routine: Routine): RoutineItem[] {
   return [...routine.items].sort((a, b) => a.position - b.position);

@@ -42,3 +42,11 @@ export function formatShortDate(localDate: string): string {
   const instant = utcInstant(localDate);
   return instant ? shortDate.format(instant).replace(".", "") : "";
 }
+
+const mediumDate = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** "2026-11-09" → "9 nov 2026". Una fecha no válida sale vacía. */
+export function formatMediumDate(localDate: string): string {
+  const instant = utcInstant(localDate);
+  return instant ? mediumDate.format(instant).replaceAll(".", "") : "";
+}

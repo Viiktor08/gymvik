@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDecimal, formatLongDate, formatShortDate, formatSigned } from "../../src/web/format";
+import { formatDecimal, formatLongDate, formatMediumDate, formatShortDate, formatSigned } from "../../src/web/format";
 
 describe("formatDecimal", () => {
   it("usa coma decimal y no rellena con ceros", () => {
@@ -55,5 +55,17 @@ describe("formatLongDate y formatShortDate", () => {
       expect(formatLongDate(bad)).toBe("");
       expect(formatShortDate(bad)).toBe("");
     }
+  });
+});
+
+describe("formatMediumDate", () => {
+  it("escribe día, mes abreviado y año, sin puntos", () => {
+    expect(formatMediumDate("2026-11-09")).toBe("9 nov 2026");
+    expect(formatMediumDate("2026-09-01")).toBe("1 sept 2026");
+  });
+
+  it("una fecha no válida sale vacía", () => {
+    expect(formatMediumDate("2026-02-30")).toBe("");
+    expect(formatMediumDate("")).toBe("");
   });
 });
