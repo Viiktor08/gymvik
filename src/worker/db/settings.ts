@@ -76,11 +76,8 @@ export async function getSettings(db: D1Database): Promise<Settings> {
   };
 }
 
-/**
- * Aplica el parche en una sola sentencia UPDATE (solo toca las columnas enviadas) y devuelve los ajustes
- * resultantes. Un parche vacío no escribe nada.
- */
-export async function updateSettings(db: D1Database, patch: SettingsPatch): Promise<Settings> {
+/** La sentencia UPDATE que aplica el parche (solo toca las columnas enviadas), o null si el parche está vacío. */
+function updateStatement(db: D1Database, patch: SettingsPatch): D1PreparedStatement | null {
   const assignments: string[] = [];
   const values: (string | number)[] = [];
 
@@ -102,11 +99,26 @@ export async function updateSettings(db: D1Database, patch: SettingsPatch): Prom
     }
   }
 
-  if (assignments.length > 0) {
-    await db
-      .prepare(`UPDATE settings SET ${assignments.join(", ")} WHERE id = 1`)
-      .bind(...values)
-      .run();
-  }
+  if (assignments.length === 0) return null;
+  return db.prepare(`UPDATE settings SET ${assignments.join(", ")} WHERE id = 1`).bind(...values);
+}
+
+/**
+ * Aplica el parche en una sola sentencia UPDATE (solo toca las columnas enviadas) y devuelve los ajustes
+ * resultantes. Un parche vacío no escribe nada.
+ */
+export async function updateSettings(db: D1Database, patch: SettingsPatch): Promise<Settings> {
+  await updateStatement(db, patch)?.run();
   return getSettings(db);
+}
+
+/**
+ * La sentencia que deja la fila de ajustes (la única) con estos valores, sin ejecutarla: la copia de
+ * seguridad la mezcla en su lote. Es un UPDATE, nunca un borrado, porque `getSettings` falla sin la fila.
+ */
+export function replaceSettingsStatement(db: D1Database, settings: Settings): D1PreparedStatement {
+  const statement = updateStatement(db, settings);
+  // Unos ajustes completos siempre tienen columnas que asignar.
+  if (statement === null) throw new Error("Ajustes sin ningún campo");
+  return statement;
 }

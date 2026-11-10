@@ -52,15 +52,13 @@ function assemble(routines: RoutineRow[], items: ItemRow[]): Routine[] {
   }));
 }
 
-/** Las rutinas sin archivar con sus ítems, en orden de rotación. */
-export async function listRoutines(db: D1Database): Promise<Routine[]> {
+/** Las rutinas con sus ítems, en orden de rotación. Las archivadas solo si se piden. */
+export async function listRoutines(db: D1Database, includeArchived = false): Promise<Routine[]> {
+  const routineWhere = includeArchived ? "" : "WHERE archived = 0";
+  const itemWhere = includeArchived ? "" : "WHERE routine_id IN (SELECT id FROM routines WHERE archived = 0)";
   const [routines, items] = await db.batch([
-    db.prepare(`SELECT ${ROUTINE_COLUMNS} FROM routines WHERE archived = 0 ${ROUTINE_ORDER}`),
-    db.prepare(
-      `SELECT ${ITEM_COLUMNS} FROM routine_items
-        WHERE routine_id IN (SELECT id FROM routines WHERE archived = 0)
-        ${ITEM_ORDER}`,
-    ),
+    db.prepare(`SELECT ${ROUTINE_COLUMNS} FROM routines ${routineWhere} ${ROUTINE_ORDER}`),
+    db.prepare(`SELECT ${ITEM_COLUMNS} FROM routine_items ${itemWhere} ${ITEM_ORDER}`),
   ]);
   return assemble((routines?.results ?? []) as RoutineRow[], (items?.results ?? []) as ItemRow[]);
 }

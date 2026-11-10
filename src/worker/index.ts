@@ -4,6 +4,7 @@ import type { WebAuthnVerifiers } from "./auth/passkeys";
 import { PUBLIC_AUTH_ROUTES, authRoutes } from "./auth/routes";
 import { requireSession } from "./auth/session";
 import type { Env } from "./env";
+import { backupRoutes } from "./routes/backup";
 import { exerciseRoutes } from "./routes/exercises";
 import { hookKeyRoutes, hookRoutes } from "./routes/hooks";
 import { bodyMetricRoutes, creatineRoutes } from "./routes/metrics";
@@ -61,6 +62,7 @@ export function createApp(webauthn: Partial<WebAuthnVerifiers> = {}) {
   app.route("/api/settings", settingsRoutes());
   app.route("/api/today", todayRoutes());
   app.route("/api/progress", progressRoutes());
+  app.route("/api/backup", backupRoutes());
   app.route("/api/hook-keys", hookKeyRoutes());
   app.route("/api/hook", hookRoutes());
 

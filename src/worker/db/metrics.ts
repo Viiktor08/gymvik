@@ -110,6 +110,14 @@ export async function upsertSteps(db: D1Database, localDate: string, steps: numb
     .run();
 }
 
+/** Los pasos de todos los días, de menor a mayor fecha. */
+export async function listAllSteps(db: D1Database): Promise<{ localDate: string; steps: number }[]> {
+  const { results } = await db
+    .prepare("SELECT local_date, steps FROM daily_steps ORDER BY local_date")
+    .all<{ local_date: string; steps: number }>();
+  return results.map((row) => ({ localDate: row.local_date, steps: row.steps }));
+}
+
 /** Los pasos de los días entre `from` y `to` (YYYY-MM-DD, ambos incluidos). */
 export async function listSteps(
   db: D1Database,
@@ -129,6 +137,14 @@ export async function listSteps(
 export async function hasCreatine(db: D1Database, localDate: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS found FROM creatine_logs WHERE local_date = ?").bind(localDate).first();
   return row !== null;
+}
+
+/** Todas las tomas de creatina, de menor a mayor fecha. */
+export async function listCreatineLogs(db: D1Database): Promise<CreatineLog[]> {
+  const { results } = await db
+    .prepare("SELECT local_date, grams, source FROM creatine_logs ORDER BY local_date")
+    .all<CreatineRow>();
+  return results.map((row) => ({ localDate: row.local_date, grams: row.grams, source: row.source }));
 }
 
 /** Los días con toma entre `from` y `to` (YYYY-MM-DD, ambos incluidos). */

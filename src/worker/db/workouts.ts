@@ -150,6 +150,11 @@ export async function listWorkoutsOfExercise(db: D1Database, exerciseId: string)
   );
 }
 
+/** Todos los entrenos con sus ejercicios y series, del más reciente al más antiguo. */
+export async function listAllWorkouts(db: D1Database): Promise<Workout[]> {
+  return loadWorkouts(db, "1 = 1", []);
+}
+
 /** Los entrenos con `local_date` entre `from` y `to` (YYYY-MM-DD, ambos incluidos), con sus series. */
 export async function listWorkoutsBetween(db: D1Database, from: string, to: string): Promise<Workout[]> {
   return loadWorkouts(db, "local_date >= ?1 AND local_date <= ?2", [from, to]);
