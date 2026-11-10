@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { formatDecimal, formatLongDate, formatMediumDate, formatShortDate, formatSigned } from "../../src/web/format";
+import {
+  formatClock,
+  formatDecimal,
+  formatLongDate,
+  formatMediumDate,
+  formatMinutes,
+  formatPace,
+  formatShortDate,
+  formatSigned,
+} from "../../src/web/format";
 
 describe("formatDecimal", () => {
   it("usa coma decimal y no rellena con ceros", () => {
@@ -67,5 +76,62 @@ describe("formatMediumDate", () => {
   it("una fecha no válida sale vacía", () => {
     expect(formatMediumDate("2026-02-30")).toBe("");
     expect(formatMediumDate("")).toBe("");
+  });
+});
+
+describe("formatClock", () => {
+  it("escribe minutos y segundos, y horas solo cuando las hay", () => {
+    expect(formatClock(0)).toBe("0:00");
+    expect(formatClock(5)).toBe("0:05");
+    expect(formatClock(90)).toBe("1:30");
+    expect(formatClock(754)).toBe("12:34");
+    expect(formatClock(3600)).toBe("1:00:00");
+    expect(formatClock(3723)).toBe("1:02:03");
+  });
+
+  it("descarta los decimales y no baja de cero", () => {
+    expect(formatClock(59.9)).toBe("0:59");
+    expect(formatClock(-4)).toBe("0:00");
+  });
+
+  it("lo que no es un número finito sale como 0:00, nunca NaN", () => {
+    expect(formatClock(Number.NaN)).toBe("0:00");
+    expect(formatClock(Number.POSITIVE_INFINITY)).toBe("0:00");
+  });
+});
+
+describe("formatPace", () => {
+  it("escribe el ritmo en min:ss por kilómetro", () => {
+    expect(formatPace(5.5)).toBe("5:30 min/km");
+    expect(formatPace(6)).toBe("6:00 min/km");
+    expect(formatPace(4.2)).toBe("4:12 min/km");
+  });
+
+  it("redondea los segundos sin llegar a 60", () => {
+    expect(formatPace(5.999)).toBe("6:00 min/km");
+  });
+
+  it("lo que no es un ritmo sale como —", () => {
+    expect(formatPace(Number.NaN)).toBe("—");
+    expect(formatPace(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatPace(0)).toBe("—");
+    expect(formatPace(-1)).toBe("—");
+  });
+});
+
+describe("formatMinutes", () => {
+  it("escribe minutos, y horas con minutos a partir de 60", () => {
+    expect(formatMinutes(0)).toBe("0 min");
+    expect(formatMinutes(45)).toBe("45 min");
+    expect(formatMinutes(60)).toBe("1 h 00 min");
+    expect(formatMinutes(65)).toBe("1 h 05 min");
+    expect(formatMinutes(125)).toBe("2 h 05 min");
+  });
+
+  it("redondea los decimales y lo que no es un número sale como 0 min", () => {
+    expect(formatMinutes(44.6)).toBe("45 min");
+    expect(formatMinutes(Number.NaN)).toBe("0 min");
+    expect(formatMinutes(-3)).toBe("0 min");
+    expect(formatMinutes(Number.POSITIVE_INFINITY)).toBe("0 min");
   });
 });

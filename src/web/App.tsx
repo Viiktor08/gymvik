@@ -19,6 +19,7 @@ import { ShortcutsGuide } from "./screens/ShortcutsGuide";
 import { Today } from "./screens/Today";
 import { WorkoutDetail } from "./screens/WorkoutDetail";
 import { Workouts } from "./screens/Workouts";
+import { startBackgroundSync } from "./session/sync";
 import { applyTheme } from "./theme";
 
 /** Decide, con `GET /api/auth/me`, qué pantalla toca: configuración, acceso o la app. */
@@ -65,6 +66,9 @@ function Shell() {
         // Sin red o sin ajustes se queda el tema actual; cada pantalla trata sus propios errores.
       });
   }, []);
+
+  // Envía los entrenos pendientes y deja al día la copia sin conexión: al abrir la app y cuando vuelve la red.
+  useEffect(() => startBackgroundSync(), []);
 
   return (
     <div className="shell">

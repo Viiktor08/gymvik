@@ -50,3 +50,27 @@ export function formatMediumDate(localDate: string): string {
   const instant = utcInstant(localDate);
   return instant ? mediumDate.format(instant).replaceAll(".", "") : "";
 }
+
+/** 90 → "1:30", 3723 → "1:02:03". Lo que no es un número finito o es negativo sale como "0:00". */
+export function formatClock(totalSeconds: number): string {
+  const seconds = Number.isFinite(totalSeconds) && totalSeconds > 0 ? Math.floor(totalSeconds) : 0;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+/** Ritmo en min/km: 5.5 → "5:30 min/km". Un ritmo que no es un número finito mayor que 0 sale como "—". */
+export function formatPace(minPerKm: number): string {
+  if (!Number.isFinite(minPerKm) || minPerKm <= 0) return "—";
+  const total = Math.round(minPerKm * 60);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")} min/km`;
+}
+
+/** 45 → "45 min", 65 → "1 h 05 min". Lo que no es un número finito o es negativo sale como "0 min". */
+export function formatMinutes(minutes: number): string {
+  const total = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : 0;
+  if (total < 60) return `${total} min`;
+  return `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, "0")} min`;
+}

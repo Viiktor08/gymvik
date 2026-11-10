@@ -45,4 +45,18 @@ describe("draftStore", () => {
     expect(await hasDraft()).toBe(false);
     expect(await loadDraft()).toBeNull();
   });
+
+  it("un clearDraft lanzado sin esperar justo después de un saveDraft gana: no queda un borrador fantasma", async () => {
+    // Pasa al terminar un entreno: el último cambio todavía se está guardando cuando se borra el borrador.
+    const pending = [saveDraft(DRAFT), saveDraft({ ...DRAFT, id: "w-2" }), clearDraft()];
+    await Promise.all(pending);
+
+    expect(await hasDraft()).toBe(false);
+  });
+
+  it("varios guardados seguidos sin esperar dejan el último", async () => {
+    await Promise.all([saveDraft(DRAFT), saveDraft({ ...DRAFT, id: "w-2" }), saveDraft({ ...DRAFT, id: "w-3" })]);
+
+    expect((await loadDraft())?.id).toBe("w-3");
+  });
 });

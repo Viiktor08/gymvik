@@ -661,6 +661,20 @@ describe("Hoy: carga y errores", () => {
     expect(document.body.textContent).not.toMatch(/Infinity|NaN|undefined/);
   });
 
+  it("sin conexión ofrece un acceso para entrenar, que lleva a Entreno", async () => {
+    server.todayFails = "offline";
+    renderToday();
+    const link = await screen.findByRole("link", { name: "Entrenar" });
+    expect(link.getAttribute("href")).toBe("/entreno");
+  });
+
+  it("con un error del servidor (hay red) no ofrece ese acceso", async () => {
+    server.todayFails = 500;
+    renderToday();
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("link", { name: "Entrenar" })).toBeNull();
+  });
+
   it("Reintentar vuelve a pedir Hoy y pinta la pantalla cuando ya hay red", async () => {
     server.todayFails = "offline";
     renderToday();

@@ -6,7 +6,7 @@ import { newRecords } from "../../shared/records";
 import { applyWorkoutToRoutine } from "../../shared/routineDiff";
 import { workoutSchema } from "../../shared/schemas";
 import type { Routine, Workout } from "../../shared/types";
-import { listExercises } from "../db/exercises";
+import { exercisesExist, listExercises } from "../db/exercises";
 import { findRoutine, replaceRoutine, routineExists } from "../db/routines";
 import { getTimezone } from "../db/settings";
 import {
@@ -17,11 +17,20 @@ import {
   replaceWorkout,
 } from "../db/workouts";
 import type { Env } from "../env";
-import { readJson } from "../http";
+import { readJson, readOptionalJson } from "../http";
 
 // El cuerpo es el entreno sin `localDate`, que calcula el servidor (lo que mande el cliente se descarta).
 // El id es opcional: manda el de la URL y, si el cuerpo lo trae, tiene que coincidir.
 const workoutBodySchema = workoutSchema.omit({ localDate: true }).partial({ id: true });
+
+// Estructura de la sesión que se lleva a la rutina: ejercicios en orden y número de series de cada uno.
+// Sin cuerpo (o `{}`) manda lo guardado en el entreno.
+const applyBodySchema = z.object({
+  exercises: z
+    .array(z.object({ exerciseId: workoutSchema.shape.id, sets: z.number().int().min(1).max(20) }))
+    .min(1)
+    .optional(),
+});
 
 const dateSchema = z.string().refine(isValidLocalDate);
 const rangeSchema = z.object({ from: dateSchema.optional(), to: dateSchema.optional() });
@@ -94,9 +103,12 @@ export function workoutRoutes(): Hono<{ Bindings: Env }> {
     return c.json({ deleted: true });
   });
 
-  // Lleva a la rutina la estructura de la sesión: ejercicios, orden y número de series.
+  // Lleva a la rutina la estructura de la sesión: ejercicios, orden y número de series. Con cuerpo `{ exercises }`
+  // es la estructura de la sesión en el móvil (también los ejercicios que no se llegaron a marcar); sin cuerpo,
+  // la de las series guardadas del entreno.
   workouts.post("/:id/apply-to-routine", async (c) => {
     const db = c.env.DB;
+    const body = await readOptionalJson(c, applyBodySchema);
     const workout = await findWorkout(db, c.req.param("id"));
     if (workout === null) throw new HTTPException(404, { message: NOT_FOUND });
     if (workout.routineId === null) {
@@ -105,9 +117,20 @@ export function workoutRoutes(): Hono<{ Bindings: Env }> {
     const routine = await findRoutine(db, workout.routineId);
     if (routine === null) throw new HTTPException(404, { message: "Rutina no encontrada" });
 
-    // Cuentan las series guardadas: un ejercicio sin ninguna no pasa a la rutina.
-    const performed = workout.exercises.filter((exercise) => exercise.sets.length > 0);
-    const updated: Routine = { ...routine, items: applyWorkoutToRoutine(routine, performed) };
+    let structure: { exerciseId: string; sets: unknown[] }[];
+    if (body.exercises === undefined) {
+      // Cuentan las series guardadas: un ejercicio sin ninguna no pasa a la rutina.
+      structure = workout.exercises.filter((exercise) => exercise.sets.length > 0);
+    } else {
+      if (!(await exercisesExist(db, [...new Set(body.exercises.map((exercise) => exercise.exerciseId))]))) {
+        throw new HTTPException(400, { message: "La estructura usa un ejercicio que no existe" });
+      }
+      structure = body.exercises.map((exercise) => ({
+        exerciseId: exercise.exerciseId,
+        sets: Array.from({ length: exercise.sets }),
+      }));
+    }
+    const updated: Routine = { ...routine, items: applyWorkoutToRoutine(routine, structure) };
     await replaceRoutine(db, updated);
 
     const reloaded = await findRoutine(db, routine.id);

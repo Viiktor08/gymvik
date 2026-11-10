@@ -154,6 +154,10 @@ export function Today() {
                   {state.message}
                 </p>
                 <p className="muted">No se pueden cargar los datos de hoy sin conexión.</p>
+                <p className="muted">Puedes entrenar igualmente: la sesión se guarda en el móvil y se envía al volver la conexión.</p>
+                <Link to="/entreno" className="button button-primary">
+                  Entrenar
+                </Link>
               </>
             ) : (
               <p role="alert" className="form-error">

@@ -690,4 +690,113 @@ describe("POST /api/workouts/:id/apply-to-routine", () => {
     expect(response.status).toBe(200);
     expect(await json(response)).toMatchObject({ id: "r1", archived: true, items: [{ exerciseId: "bench", sets: 1 }] });
   });
+
+  describe("con la estructura de la sesión en el cuerpo", () => {
+    const apply = (exercises: unknown) => send("POST", "/api/workouts/w1/apply-to-routine", { body: { exercises } });
+
+    async function seedWithOnlyBenchDone(): Promise<void> {
+      await seedRoutineWorkout();
+      // El entreno guardado solo tiene las series hechas: el squat de la rutina no se llegó a marcar.
+      await putOk("w1", { routineId: "r1", exercises: [{ exerciseId: "bench", sets: [set(60, 8)] }] });
+    }
+
+    it("usa la estructura del cuerpo y no la del entreno guardado", async () => {
+      await seedWithOnlyBenchDone();
+
+      const response = await apply([
+        { exerciseId: "bench", sets: 3 },
+        { exerciseId: "squat", sets: 4 },
+        { exerciseId: "ohp", sets: 2 },
+      ]);
+
+      expect(response.status).toBe(200);
+      expect((await json(response)).items).toEqual([
+        { exerciseId: "bench", position: 0, sets: 3, repsTarget: "6-8", restSeconds: 120 },
+        { exerciseId: "squat", position: 1, sets: 4, repsTarget: "8-10", restSeconds: 150 },
+        { exerciseId: "ohp", position: 2, sets: 2, repsTarget: "10", restSeconds: 90 },
+      ]);
+      expect((await listRoutines())[0]?.items).toHaveLength(3);
+    });
+
+    it("sin cuerpo mantiene el comportamiento de siempre", async () => {
+      await seedWithOnlyBenchDone();
+
+      const routine = await json(await send("POST", "/api/workouts/w1/apply-to-routine"));
+
+      expect(routine.items).toEqual([{ exerciseId: "bench", position: 0, sets: 1, repsTarget: "6-8", restSeconds: 120 }]);
+    });
+
+    it("es idempotente", async () => {
+      await seedWithOnlyBenchDone();
+      const body = [{ exerciseId: "squat", sets: 2 }];
+
+      const first = await json(await apply(body));
+      const second = await json(await apply(body));
+
+      expect(second).toEqual(first);
+    });
+
+    it.each([
+      ["una lista vacía", []],
+      ["0 series", [{ exerciseId: "bench", sets: 0 }]],
+      ["21 series", [{ exerciseId: "bench", sets: 21 }]],
+      ["series fraccionarias", [{ exerciseId: "bench", sets: 2.5 }]],
+      ["series como texto", [{ exerciseId: "bench", sets: "3" }]],
+      ["un ejercicio sin id", [{ sets: 3 }]],
+      ["algo que no es una lista", { exerciseId: "bench", sets: 3 }],
+    ])("responde 400 con %s y no toca la rutina", async (_name, exercises) => {
+      await seedWithOnlyBenchDone();
+
+      const response = await apply(exercises);
+
+      expect(response.status).toBe(400);
+      expect(await count("routine_items", "routine_id = 'r1'")).toBe(2);
+    });
+
+    it("responde 400 con un ejercicio que no existe y no toca la rutina", async () => {
+      await seedWithOnlyBenchDone();
+
+      const response = await apply([
+        { exerciseId: "bench", sets: 3 },
+        { exerciseId: "fantasma", sets: 3 },
+      ]);
+
+      expect(response.status).toBe(400);
+      expect(await count("routine_items", "routine_id = 'r1'")).toBe(2);
+    });
+
+    it("acepta el mismo ejercicio dos veces y 20 series", async () => {
+      await seedWithOnlyBenchDone();
+
+      const response = await apply([
+        { exerciseId: "bench", sets: 20 },
+        { exerciseId: "bench", sets: 1 },
+      ]);
+
+      expect(response.status).toBe(200);
+      expect((await json(response)).items).toMatchObject([
+        { exerciseId: "bench", sets: 20 },
+        { exerciseId: "bench", sets: 1 },
+      ]);
+    });
+
+    it("sigue respondiendo 409 si el entreno no tiene rutina y 404 si no existe", async () => {
+      await seedRoutineWorkout();
+      await putOk("w1", { routineId: null });
+
+      expect((await apply([{ exerciseId: "bench", sets: 3 }])).status).toBe(409);
+      const missing = await send("POST", "/api/workouts/no-existe/apply-to-routine", {
+        body: { exercises: [{ exerciseId: "bench", sets: 3 }] },
+      });
+      expect(missing.status).toBe(404);
+    });
+
+    it("un cuerpo que no es JSON responde 400", async () => {
+      await seedWithOnlyBenchDone();
+
+      const response = await send("POST", "/api/workouts/w1/apply-to-routine", { body: "{no es json" });
+
+      expect(response.status).toBe(400);
+    });
+  });
 });

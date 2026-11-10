@@ -4,25 +4,35 @@ import type { Routine } from "../../shared/types";
 import { api } from "../api";
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon } from "../components/icons";
 import { LoadError } from "../components/LoadError";
+import { LOAD_TIMEOUT_MS, loadRoutines } from "../session/offlineData";
 import type { TodayData } from "../todayData";
 import { failureMessage, useLoad } from "../useLoad";
 
 type Loaded = {
   routines: Routine[];
+  /** Sin conexión: las rutinas salen de la copia guardada en el móvil. Se pueden empezar, no reordenar. */
+  fromCache: boolean;
   /** La rutina que toca; `null` si no hay o si Hoy no respondió (entonces no se marca ninguna). */
   nextId: string | null;
 };
 
 /** Qué rutina toca según el servidor; `null` si no hay ninguna o si Hoy no responde (entonces no se marca ninguna). */
 async function fetchNextId(): Promise<string | null> {
-  const today = await api<TodayData>("/api/today").catch(() => null);
-  return today?.next?.routine.id ?? null;
+  // Es solo un adorno de la lista: con poca señal no puede retrasar las rutinas.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+  try {
+    const today = await api<TodayData>("/api/today", { signal: controller.signal }).catch(() => null);
+    return today?.next?.routine.id ?? null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchLoaded(): Promise<Loaded> {
   // La lista es lo imprescindible; qué rutina toca solo la completa.
-  const [routines, nextId] = await Promise.all([api<Routine[]>("/api/routines"), fetchNextId()]);
-  return { routines, nextId };
+  const [routines, nextId] = await Promise.all([loadRoutines({ timeoutMs: LOAD_TIMEOUT_MS }), fetchNextId()]);
+  return { routines: routines.data, fromCache: routines.fromCache, nextId };
 }
 
 function exerciseCount(n: number): string {
@@ -106,7 +116,7 @@ export function Workouts() {
       const routines = await api<Routine[]>("/api/routines/reorder", { method: "POST", body: JSON.stringify({ ids }) });
       // "Te toca" depende del orden de la rotación: se vuelve a pedir a Hoy y se cambia todo a la vez, sin pantalla de carga.
       // Si Hoy no responde no se deja la etiqueta de antes (sería la de otra rutina): se quita hasta recargar.
-      setData({ routines, nextId: await fetchNextId() });
+      setData({ routines, fromCache: false, nextId: await fetchNextId() });
     } catch (failure) {
       setMoveError(failureMessage(failure, "No se pudo cambiar el orden"));
     } finally {
@@ -139,6 +149,12 @@ export function Workouts() {
         <LoadError message={state.message} offline={state.offline} onRetry={() => void reload()} />
       ) : null}
 
+      {state.status === "ready" && state.data.fromCache ? (
+        <p role="status" className="notice">
+          Sin conexión: estas son las rutinas guardadas en el móvil. Puedes entrenar igualmente.
+        </p>
+      ) : null}
+
       {state.status === "ready" && state.data.routines.length === 0 ? (
         <div className="card">
           <p className="card-title">Todavía no tienes rutinas</p>
@@ -158,13 +174,17 @@ export function Workouts() {
                     key={routine.id}
                     routine={routine}
                     isNext={routine.id === state.data.nextId}
-                    move={{
-                      canUp: index > 0,
-                      canDown: index < rotation.length - 1,
-                      busy,
-                      onUp: () => void move(rotation, index, -1),
-                      onDown: () => void move(rotation, index, 1),
-                    }}
+                    move={
+                      state.data.fromCache
+                        ? null
+                        : {
+                            canUp: index > 0,
+                            canDown: index < rotation.length - 1,
+                            busy,
+                            onUp: () => void move(rotation, index, -1),
+                            onDown: () => void move(rotation, index, 1),
+                          }
+                    }
                   />
                 ))}
               </ul>

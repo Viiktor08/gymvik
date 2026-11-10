@@ -1,8 +1,11 @@
+import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { IDBFactory } from "fake-indexeddb";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Routine } from "../../src/shared/types";
 import { Workouts } from "../../src/web/screens/Workouts";
+import { saveSnapshot } from "../../src/web/session/offlineCache";
 
 function routine(id: string, name: string, extra: Partial<Routine> = {}): Routine {
   return {
@@ -106,6 +109,7 @@ function nextLabelOn(): string | null {
 }
 
 beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
   server.routines = [PECHO, ESPALDA, PIERNA, BRAZOS];
   server.lastDoneId = "r-pecho";
   server.routinesFail = null;
@@ -301,5 +305,63 @@ describe("Entreno: reordenar la rotación", () => {
     await waitFor(() => expect((screen.getByRole("button", { name: "Bajar Espalda" }) as HTMLButtonElement).disabled).toBe(true));
     gate.release?.();
     await waitFor(() => expect(routinesIn("En rotación")).toEqual(["Espalda", "Pecho", "Pierna"]));
+  });
+});
+
+describe("Entreno: sin conexión", () => {
+  async function saveOfflineCopy() {
+    await saveSnapshot({
+      savedAt: "2026-11-09T10:00:00.000Z",
+      routines: [PECHO, ESPALDA, BRAZOS],
+      exercises: [],
+      last: {},
+    });
+  }
+
+  it("enseña las rutinas guardadas en el móvil, con un aviso y para empezarlas", async () => {
+    await saveOfflineCopy();
+    server.routinesFail = "offline";
+    server.todayFails = true;
+
+    await renderLoaded();
+
+    expect(screen.getByRole("status").textContent).toMatch(/Sin conexión: estas son las rutinas guardadas en el móvil/);
+    expect(routinesIn("En rotación")).toEqual(["Pecho", "Espalda"]);
+    expect(routinesIn("Otras rutinas")).toEqual(["Brazos"]);
+    expect(screen.getByRole("link", { name: "Empezar Pecho" }).getAttribute("href")).toBe("/entreno/sesion?rutina=r-pecho");
+    expect(screen.getByRole("link", { name: "Entreno libre" })).toBeTruthy();
+  });
+
+  it("sin conexión no ofrece reordenar, que necesita al servidor, ni marca cuál toca (Hoy tampoco responde)", async () => {
+    await saveOfflineCopy();
+    server.routinesFail = "offline";
+    server.todayFails = true;
+
+    await renderLoaded();
+
+    expect(screen.queryByRole("button", { name: /^(Subir|Bajar) / })).toBeNull();
+    expect(screen.queryByText("SIGUIENTE")).toBeNull();
+  });
+
+  it("con conexión no sale el aviso", async () => {
+    await saveOfflineCopy();
+
+    await renderLoaded();
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Bajar / }).length).toBeGreaterThan(0);
+  });
+
+  it("un error del servidor no se esconde con la copia guardada", async () => {
+    await saveOfflineCopy();
+    server.routinesFail = 500;
+    render(
+      <MemoryRouter>
+        <Workouts />
+      </MemoryRouter>,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Error interno");
+    expect(screen.queryByRole("heading", { level: 3, name: "Pecho" })).toBeNull();
   });
 });

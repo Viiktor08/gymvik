@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Category, Exercise } from "../../shared/types";
-import { api } from "../api";
 import { CATEGORIES, CATEGORY_LABELS, matchesSearch, sortExercises } from "../exerciseUtils";
+import { loadExercises } from "../session/offlineData";
 import { useLoad } from "../useLoad";
 import { LoadError } from "./LoadError";
 
@@ -12,9 +12,12 @@ type Props = {
 
 type CategoryFilter = Category | "all";
 
-/** Buscador y filtros por categoría sobre la biblioteca. No ofrece los ejercicios archivados. */
+/**
+ * Buscador y filtros por categoría sobre la biblioteca. No ofrece los ejercicios archivados. Sin conexión usa
+ * la copia guardada en el móvil, para poder añadir ejercicios a un entreno en el gimnasio sin cobertura.
+ */
 export function ExercisePicker({ onPick }: Props) {
-  const { state, reload } = useLoad(async () => sortExercises(await api<Exercise[]>("/api/exercises")));
+  const { state, reload } = useLoad(async () => sortExercises((await loadExercises({ archived: false })).data));
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
 
