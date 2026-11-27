@@ -139,6 +139,3 @@ mkdir -p .local && (umask 077 && printf 'https://<url>/setup?token=%s\n' "$TOKEN
 
 Cloudflare no vuelve a mostrar el valor de un secreto: si pierdes `SETUP_TOKEN`, pon uno nuevo con otro `secret put` del mismo nombre. `npx wrangler secret list` enseña los nombres, nunca los valores.
 
-## Licencia
-
-[MIT](LICENSE).
