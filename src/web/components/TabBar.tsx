@@ -23,7 +23,7 @@ const TABS: readonly Tab[] = [
   { to: "/progreso", label: "Progreso", icon: <TrendIcon />, isActive: (path) => section(path, "/progreso") },
 ];
 
-/** Navegación inferior: Hoy · Entreno · Progreso (spec §5). */
+/** Navegación inferior: Hoy · Entreno · Progreso. */
 export function TabBar() {
   const { pathname } = useLocation();
   return (

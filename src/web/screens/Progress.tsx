@@ -169,7 +169,7 @@ function ExercisesPanel({ exerciseId, onExercise }: { exerciseId: string; onExer
   );
 }
 
-/** Progreso (spec §5.6): peso, comparación de semanas y evolución y récords por ejercicio. */
+/** Progreso: peso, comparación de semanas y evolución y récords por ejercicio. */
 export function Progress() {
   const [params, setParams] = useSearchParams();
   const tab = tabFrom(params.get(TAB_PARAM));

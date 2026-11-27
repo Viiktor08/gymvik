@@ -1,4 +1,4 @@
-// Envío de avisos push (spec §6): cifrado aes128gcm (RFC 8291) y firma VAPID (RFC 8292) con WebCrypto, que es
+// Envío de avisos push: cifrado aes128gcm (RFC 8291) y firma VAPID (RFC 8292) con WebCrypto, que es
 // lo que ofrece workerd. La librería `web-push` de Node no sirve aquí (usa los módulos http y crypto de Node).
 import { buildPushPayload } from "@block65/webcrypto-web-push";
 import type { PushMessage } from "../../shared/notifications";

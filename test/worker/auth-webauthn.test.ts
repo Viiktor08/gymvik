@@ -7,7 +7,7 @@ import { SoftAuthenticator } from "./softAuthenticator";
 
 // Ceremonias WebAuthn completas contra la app real, con la verificación real de
 // @simplewebauthn/server (sin stubs) y un autenticador por software. Comprueba
-// que la librería funciona en workerd y que las reglas de la spec §8 se cumplen.
+// que la librería funciona en workerd y que las reglas de seguridad se cumplen.
 
 type Json = Record<string, any>;
 

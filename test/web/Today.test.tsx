@@ -155,7 +155,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("Hoy: casos del plan", () => {
+describe("Hoy: casos límite", () => {
   it("sin rutina que toque invita a crear la primera y no muestra Infinity ni NaN", async () => {
     server.today = todayData({
       next: null,

@@ -437,7 +437,7 @@ describe("permisos de los hooks", () => {
 });
 
 describe("POST /api/hook/creatine", () => {
-  it("marca hoy con los gramos de ajustes, origen nfc y el mensaje de la spec", async () => {
+  it("marca hoy con los gramos de ajustes, origen nfc y el mensaje esperado", async () => {
     const key = await createKey(["creatine"]);
 
     const response = await hook("creatine", key);
@@ -565,7 +565,7 @@ describe("POST /api/hook/creatine", () => {
 });
 
 describe("POST /api/hook/steps", () => {
-  it("guarda los pasos de hoy y responde con el mensaje de la spec", async () => {
+  it("guarda los pasos de hoy y responde con el mensaje esperado", async () => {
     const key = await createKey(["steps"]);
 
     const response = await hook("steps", key, { body: { steps: 8432 } });

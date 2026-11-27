@@ -13,7 +13,7 @@ type Props = {
 };
 
 /**
- * Menú ⋯ de un ejercicio (spec §5.3). Añadir o quitar serie y mover no lo cierran, para poder repetirlos;
+ * Menú ⋯ de un ejercicio. Añadir o quitar serie y mover no lo cierran, para poder repetirlos;
  * cambiar por otro ejercicio y quitar sí.
  */
 export function ExerciseMenu({ title, position, onAddSet, onRemoveSet, onSwap, onMove, onRemove, onClose }: Props) {

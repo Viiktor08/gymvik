@@ -11,7 +11,7 @@ function workoutCount(n: number): string {
   return n === 1 ? "1 entreno" : `${n} entrenos`;
 }
 
-/** Historial (spec §5.4): los entrenos agrupados por semana y el registro de un entreno pasado. */
+/** Historial: los entrenos agrupados por semana y el registro de un entreno pasado. */
 export function History() {
   const { state, reload } = useLoad(() => api<WorkoutSummary[]>("/api/workouts"));
   const [adding, setAdding] = useState(false);

@@ -27,7 +27,7 @@ function intentFrom(routineId: string | null, free: boolean): SessionIntent {
 }
 
 /**
- * Sesión en directo (spec §5.3). Funciona sin conexión: empieza con las rutinas y la última vez guardadas en el
+ * Sesión en directo. Funciona sin conexión: empieza con las rutinas y la última vez guardadas en el
  * móvil, guarda cada cambio en el móvil y al terminar manda el entreno cuando puede.
  *
  * - `/entreno/sesion?rutina=<id>` empieza esa rutina.

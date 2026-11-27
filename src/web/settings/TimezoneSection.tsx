@@ -30,7 +30,7 @@ export function timeZoneOptions(current: string): string[] {
 }
 
 /**
- * Zona horaria (spec §2): con ella se calculan "hoy", la semana (que empieza el lunes), las rachas y la hora de
+ * Zona horaria: con ella se calculan "hoy", la semana (que empieza el lunes), las rachas y la hora de
  * los avisos. Por defecto es Europe/Madrid.
  */
 export function TimezoneSection({ initial }: { initial: string }) {

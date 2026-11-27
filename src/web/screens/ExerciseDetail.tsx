@@ -49,7 +49,7 @@ function ExerciseMedia({ url, name }: { url: string; name: string }) {
   );
 }
 
-/** Ficha de un ejercicio (spec §5.5): descripción, imagen o enlace, tu historial y su gráfica. */
+/** Ficha de un ejercicio: descripción, imagen o enlace, tu historial y su gráfica. */
 export function ExerciseDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();

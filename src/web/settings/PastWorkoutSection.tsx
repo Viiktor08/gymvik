@@ -3,7 +3,7 @@ import { PlusIcon } from "../components/icons";
 import { ManualWorkoutForm } from "../components/ManualWorkoutForm";
 
 /**
- * Entreno pasado (spec §5.4 y §5.7): el mismo formulario del Historial, en línea. El formulario abre su propia hoja
+ * Entreno pasado: el mismo formulario del Historial, en línea. El formulario abre su propia hoja
  * para elegir ejercicios, así que no puede vivir dentro de otra hoja.
  */
 export function PastWorkoutSection() {

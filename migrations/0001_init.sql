@@ -1,4 +1,4 @@
--- Esquema inicial de Gymvik (spec §4 y §6).
+-- Esquema inicial de Gymvik.
 --
 -- Convenciones:
 --  * Columnas en snake_case.
@@ -100,7 +100,7 @@ CREATE TABLE creatine_logs (
   source TEXT NOT NULL CHECK (source IN ('nfc', 'manual'))
 );
 
--- Ajustes: una única fila. Los avisos (spec §6) van en columnas planas notify_<tipo>_enabled y notify_<tipo>_time.
+-- Ajustes: una única fila. Los avisos van en columnas planas notify_<tipo>_enabled y notify_<tipo>_time.
 CREATE TABLE settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   display_name TEXT NOT NULL DEFAULT 'Victor',

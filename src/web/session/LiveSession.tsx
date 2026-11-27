@@ -75,7 +75,7 @@ function cardKeys(draft: Draft): string[] {
 }
 
 /**
- * La sesión en curso (spec §5.3). El borrador se guarda en el móvil con cada cambio; al terminar se encola, se
+ * La sesión en curso. El borrador se guarda en el móvil con cada cambio; al terminar se encola, se
  * intenta enviar y se enseña el resumen. Nada de lo que hay aquí necesita conexión.
  */
 export function LiveSession({ initial, context, onFinished, onDiscarded }: Props) {

@@ -22,7 +22,7 @@ function validationProblem(weekly: number | null, steps: number | null, grams: n
   return null;
 }
 
-/** Objetivos (spec §5.7): entrenos por semana (define la racha), pasos al día y gramos de creatina. */
+/** Objetivos: entrenos por semana (define la racha), pasos al día y gramos de creatina. */
 export function GoalsSection({ initial }: { initial: Goals }) {
   const ids = useId();
   const [weekly, setWeekly] = useState<number | null>(initial.weeklyGoal);

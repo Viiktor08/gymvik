@@ -189,7 +189,7 @@ function WorkoutBody({ initial, catalog, routineName }: BodyProps) {
   );
 }
 
-/** Detalle de un entreno (spec §5.4): sus series y notas se editan y el entreno se borra con confirmación. */
+/** Detalle de un entreno: sus series y notas se editan y el entreno se borra con confirmación. */
 export function WorkoutDetail() {
   const { id = "" } = useParams();
   const { state, reload } = useLoad(() => fetchLoaded(id), id);

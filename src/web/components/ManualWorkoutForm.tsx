@@ -19,7 +19,7 @@ type Props = {
 };
 
 /**
- * Apunta un entreno ya hecho (spec §5.4): fecha (hoy o pasada), rutina o libre, duración y, si se quiere,
+ * Apunta un entreno ya hecho: fecha (hoy o pasada), rutina o libre, duración y, si se quiere,
  * las series. Sirve en el Historial y en Ajustes. Abre una hoja para elegir ejercicios: no lo metas en otra hoja.
  */
 export function ManualWorkoutForm({ onSaved, onCancel }: Props) {

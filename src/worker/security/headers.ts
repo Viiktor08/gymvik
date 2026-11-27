@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 
 /**
- * Cabeceras de seguridad de la spec §8. public/_headers repite estos mismos
+ * Cabeceras de seguridad. public/_headers repite estos mismos
  * valores para los estáticos, que no pasan por el Worker; un test comprueba que
  * ambos coinciden.
  */

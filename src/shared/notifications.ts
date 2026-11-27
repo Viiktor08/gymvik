@@ -1,5 +1,5 @@
 // Qué avisos push toca enviar ahora. Función pura: la tarea programada del Worker (cada 15 minutos)
-// le pasa el estado ya leído de la base de datos y envía lo que devuelva. Las reglas están en la spec §6.
+// le pasa el estado ya leído de la base de datos y envía lo que devuelva.
 import { addDays, daysLeftInWeek, formatThousands, localDate, localTime } from "./dates";
 import { streakWeeks, weekProgress } from "./streak";
 import type { NotificationType, Settings } from "./types";

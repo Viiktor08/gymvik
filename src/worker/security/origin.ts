@@ -7,7 +7,7 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export const HOOK_PREFIX = "/api/hook/";
 
 /**
- * Defensa CSRF (spec §8): los métodos que modifican datos deben llevar una
+ * Defensa CSRF: los métodos que modifican datos deben llevar una
  * cabecera `Origin` igual a la del propio sitio. Un `Origin` ausente también se
  * rechaza. Los hooks de los Atajos (`/api/hook/*`) quedan exentos porque no usan
  * cookie de sesión, sino una clave Bearer.

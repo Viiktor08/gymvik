@@ -182,7 +182,7 @@ function SignOutCard() {
   );
 }
 
-/** Cuenta (spec §5.7): passkeys, códigos de recuperación y cerrar sesión. */
+/** Cuenta: passkeys, códigos de recuperación y cerrar sesión. */
 export function AccountSection() {
   const titleId = useId();
   return (

@@ -11,7 +11,7 @@ type Props = {
 type WeightKey = "weightKg" | "avg7";
 type FatKey = "bodyFatPct";
 
-// El peso de cada día va fino y apagado; la línea gruesa y de color es la media de 7 días (spec §5.6).
+// El peso de cada día va fino y apagado; la línea gruesa y de color es la media de 7 días.
 const WEIGHT: readonly Series<WeightKey>[] = [
   { key: "weightKg", label: "Peso diario", unit: "kg", color: "var(--chart-text)", swatch: "chart-key-thin" },
   { key: "avg7", label: "Media de 7 días", unit: "kg", color: "var(--series-1)", swatch: "chart-key-thick" },

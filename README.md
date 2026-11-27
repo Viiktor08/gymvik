@@ -1,12 +1,34 @@
 # Gymvik
 
-App personal de entrenamiento de gimnasio para un único usuario, instalable en iPhone como PWA.
+App de entrenamiento de gimnasio que me he hecho para mí: la uso a diario en el iPhone, instalada como PWA. Es de un solo usuario, sin registro público.
 
-- Front: React + TypeScript (Vite).
-- Back: Hono en un único Cloudflare Worker, que sirve también la app estática.
-- Datos: Cloudflare D1 (SQLite).
+<!-- Capturas: pon las imágenes en docs/capturas/ y quita este comentario.
+<p align="center">
+  <img src="docs/capturas/hoy.png" width="200" alt="Pantalla Hoy">
+  <img src="docs/capturas/sesion.png" width="200" alt="Sesión en curso">
+  <img src="docs/capturas/progreso.png" width="200" alt="Progreso">
+  <img src="docs/capturas/ajustes.png" width="200" alt="Ajustes">
+</p>
+-->
 
-El diseño completo está en [`docs/superpowers/specs/2026-11-09-gymvik-design.md`](docs/superpowers/specs/2026-11-09-gymvik-design.md) y el plan de implementación en [`docs/superpowers/plans/2026-11-09-gymvik.md`](docs/superpowers/plans/2026-11-09-gymvik.md).
+## Qué hace
+
+- **Hoy:** qué rutina toca según la rotación, racha en semanas, pasos, peso, creatina y la semana de lunes a domingo.
+- **Rutinas y biblioteca:** rutinas propias en rotación, más de 60 ejercicios de serie y los que añadas tú (con imagen o vídeo).
+- **Sesión en directo sin cobertura:** el entreno se guarda en el móvil serie a serie, con temporizador de descanso, y se sincroniza solo cuando vuelve la conexión, sin duplicados.
+- **Progreso:** gráfica de peso con media de 7 días, comparación con la semana anterior y evolución y récords por ejercicio (peso máximo, 1RM estimado, volumen, distancia y ritmo).
+- **Creatina con NFC y pasos desde Salud:** dos Atajos de iOS llaman a la API con claves de solo escritura; basta con acercar el móvil a una pegatina.
+- **Avisos push:** recordatorios de entreno, creatina, pasos, racha y peso a la hora elegida, enviados por una tarea programada del Worker.
+- **Cuenta:** acceso con passkey (Face ID), códigos de recuperación, exportar e importar todo en JSON, y temas de color.
+
+## Stack
+
+- **Front:** React + TypeScript (Vite), PWA con service worker (Workbox) e IndexedDB para el modo sin conexión.
+- **Back:** Hono en un único Cloudflare Worker, que sirve también la app estática, más un cron cada 15 minutos para los avisos.
+- **Datos:** Cloudflare D1 (SQLite).
+- **Seguridad:** WebAuthn (passkeys), cookies de sesión con hash en base de datos, defensa CSRF por origen, cabeceras de seguridad y límite de peticiones por IP.
+- **Push:** Web Push con cifrado aes128gcm y firma VAPID hechos con WebCrypto.
+- **Tests:** Vitest, en el runtime de Workers y en jsdom, con CI en GitHub Actions.
 
 ## Requisitos
 
@@ -82,7 +104,7 @@ curl -i https://<tu-worker>.<tu-subdominio>.workers.dev/api/health      # 200 {"
 curl -s https://<tu-worker>.<tu-subdominio>.workers.dev/api/auth/me     # {"authenticated":false,"setupRequired":true} mientras no haya passkey
 ```
 
-Primer arranque: abre `https://<url>/setup?token=<SETUP_TOKEN>` en Safari del iPhone, crea la passkey con Face ID y guarda los 8 códigos de recuperación. La passkey queda ligada al dominio: si cambias el subdominio de `workers.dev` hay que repetir el registro. La lista de comprobaciones en el móvil real está en [`docs/verificacion-iphone.md`](docs/verificacion-iphone.md).
+Primer arranque: abre `https://<url>/setup?token=<SETUP_TOKEN>` en Safari del iPhone, crea la passkey con Face ID y guarda los 8 códigos de recuperación. La passkey queda ligada al dominio: si cambias el subdominio de `workers.dev` hay que repetir el registro.
 
 ## Secretos
 
@@ -111,8 +133,12 @@ TOKEN=$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toS
 printf '%s' "$TOKEN" | npx wrangler secret put SETUP_TOKEN
 printf '%s' 'mailto:tu-correo@example.com' | npx wrangler secret put VAPID_SUBJECT
 
-# La URL de configuración, en un archivo solo legible por ti (.superpowers/ está ignorado por git):
-mkdir -p .superpowers && (umask 077 && printf 'https://<url>/setup?token=%s\n' "$TOKEN" > .superpowers/setup-url.txt)
+# La URL de configuración, en un archivo solo legible por ti (.local/ está ignorado por git):
+mkdir -p .local && (umask 077 && printf 'https://<url>/setup?token=%s\n' "$TOKEN" > .local/setup-url.txt)
 ```
 
 Cloudflare no vuelve a mostrar el valor de un secreto: si pierdes `SETUP_TOKEN`, pon uno nuevo con otro `secret put` del mismo nombre. `npx wrangler secret list` enseña los nombres, nunca los valores.
+
+## Licencia
+
+[MIT](LICENSE).

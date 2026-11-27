@@ -37,7 +37,7 @@ function Guide({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Guía paso a paso (spec §7) para montar los dos atajos de iOS y sus automatizaciones. */
+/** Guía paso a paso para montar los dos atajos de iOS y sus automatizaciones. */
 export function ShortcutsGuide() {
   const shortcutName = useShortcutName();
 

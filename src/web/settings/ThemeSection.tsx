@@ -10,7 +10,7 @@ function prefersDark(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-/** Tema (spec §5.7): los 8 colores. El modo claro u oscuro lo decide el sistema. */
+/** Tema: los 8 colores. El modo claro u oscuro lo decide el sistema. */
 export function ThemeSection({ initial }: { initial: Theme }) {
   const titleId = useId();
   const [theme, setTheme] = useState(initial);

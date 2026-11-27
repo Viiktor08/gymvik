@@ -89,7 +89,7 @@ function RoutineCard({ routine, isNext, move }: CardProps) {
   );
 }
 
-/** Pestaña Entreno (spec §5.2): rutinas en rotación y otras, entreno libre y accesos a Historial y Biblioteca. */
+/** Pestaña Entreno: rutinas en rotación y otras, entreno libre y accesos a Historial y Biblioteca. */
 export function Workouts() {
   const { state, reload, setData } = useLoad(fetchLoaded);
   const [busy, setBusy] = useState(false);

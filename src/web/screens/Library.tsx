@@ -6,7 +6,7 @@ import { ExercisePicker } from "../components/ExercisePicker";
 import { ChevronLeftIcon, PlusIcon } from "../components/icons";
 import { Sheet } from "../components/Sheet";
 
-/** Biblioteca de ejercicios (spec §5.5): buscador, filtros por categoría y alta de ejercicios propios. */
+/** Biblioteca de ejercicios: buscador, filtros por categoría y alta de ejercicios propios. */
 export function Library() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);

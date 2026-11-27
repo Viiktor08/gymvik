@@ -57,7 +57,7 @@ async function tolerate<T>(load: () => Promise<Cached<T[]>>, draftExists: boolea
 }
 
 /**
- * Decide con qué sesión se abre la pantalla (spec §5.3):
+ * Decide con qué sesión se abre la pantalla:
  * - `continue` (el aviso de Hoy): continúa el borrador o, si no hay, un entreno libre;
  * - `free` (el botón Entreno libre): si el borrador es libre y es de hoy (menos de 12 h), lo continúa; si es
  *   libre pero está olvidado, o es de una rutina, pregunta (salvo `replace`, que ya lo ha aprobado el usuario);

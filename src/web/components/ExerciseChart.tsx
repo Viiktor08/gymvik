@@ -12,7 +12,7 @@ type Props = {
 
 type SeriesKey = "maxWeight" | "best1RM" | "maxDistance";
 
-// Fuerza: peso máximo y 1RM estimado por sesión (spec §5.6). Cardio: distancia máxima.
+// Fuerza: peso máximo y 1RM estimado por sesión. Cardio: distancia máxima.
 const STRENGTH: readonly Series<SeriesKey>[] = [
   { key: "maxWeight", label: "Peso máximo", unit: "kg", color: "var(--series-1)", swatch: "chart-key-1" },
   { key: "best1RM", label: "1RM estimado", unit: "kg", color: "var(--series-2)", swatch: "chart-key-2" },

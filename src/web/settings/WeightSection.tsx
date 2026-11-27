@@ -5,7 +5,7 @@ import { NumberInput } from "../components/NumberInput";
 import { deviceToday } from "../historyData";
 import { failureMessage } from "../useLoad";
 
-/** Peso manual (spec §5.7): fecha, peso y % de grasa. También se puede apuntar desde Hoy. */
+/** Peso manual: fecha, peso y % de grasa. También se puede apuntar desde Hoy. */
 export function WeightSection() {
   const ids = useId();
   const [date, setDate] = useState(() => deviceToday());

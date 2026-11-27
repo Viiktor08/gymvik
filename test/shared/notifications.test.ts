@@ -3,7 +3,7 @@ import { addDays } from "../../src/shared/dates";
 import { dueNotifications, type NotificationState } from "../../src/shared/notifications";
 import type { NotificationType, Settings } from "../../src/shared/types";
 
-// Ajustes por defecto de la spec §6: horas de los avisos, objetivo de 3 entrenos y 8.000 pasos.
+// Ajustes por defecto: horas de los avisos, objetivo de 3 entrenos y 8.000 pasos.
 const SETTINGS: Settings = {
   displayName: "Victor",
   theme: "green",

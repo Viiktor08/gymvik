@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 describe("applyTheme", () => {
-  it("define los 8 colores de la spec §5.7", () => {
+  it("define los 8 colores del tema", () => {
     expect(Object.keys(theme.THEMES).sort()).toEqual(
       ["blue", "graphite", "green", "orange", "pink", "purple", "red", "teal"].sort(),
     );

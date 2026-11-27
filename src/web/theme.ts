@@ -13,7 +13,7 @@ type ThemeColors = {
   dark: Palette;
 };
 
-// Los 8 colores de la spec §5.7. Cada variante llega a 4,5:1 tanto entre el
+// Los 8 colores del tema. Cada variante llega a 4,5:1 tanto entre el
 // acento y su texto como entre el acento y el fondo de styles.css (lo comprueba
 // test/web/theme.test.ts).
 export const THEMES: Record<Theme, ThemeColors> = {

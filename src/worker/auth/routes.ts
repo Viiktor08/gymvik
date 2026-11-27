@@ -148,7 +148,7 @@ export function authRoutes(deps: Partial<WebAuthnVerifiers> = {}): Hono<{ Bindin
   const { verifyRegistration, verifyAuthentication } = { ...defaultVerifiers, ...deps };
   const auth = new Hono<{ Bindings: Env }>();
 
-  // Setup, login y recuperación: 10 por minuto por IP (spec §8).
+  // Setup, login y recuperación: 10 por minuto por IP.
   auth.use("/setup/*", limitByIp("setup"));
   auth.use("/login/*", limitByIp("login"));
   auth.use("/recover", limitByIp("recover"));

@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 describe("securityHeaders", () => {
-  it("añade a toda respuesta las cabeceras de la spec §8", async () => {
+  it("añade a toda respuesta las cabeceras de seguridad", async () => {
     const response = await request("/api/health");
 
     expect(response.status).toBe(200);

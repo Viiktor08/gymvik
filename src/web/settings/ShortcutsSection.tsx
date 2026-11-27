@@ -261,7 +261,7 @@ function KeysCard() {
   );
 }
 
-/** Atajos y NFC (spec §5.7): claves con permisos, URL de los hooks, nombre del Atajo de Salud y la guía. */
+/** Atajos y NFC: claves con permisos, URL de los hooks, nombre del Atajo de Salud y la guía. */
 export function ShortcutsSection({ shortcutName }: { shortcutName: string }) {
   const titleId = useId();
   return (

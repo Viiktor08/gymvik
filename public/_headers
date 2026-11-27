@@ -1,4 +1,4 @@
-# Cabeceras de seguridad de los estáticos (spec §8). run_worker_first es solo
+# Cabeceras de seguridad de los estáticos. run_worker_first es solo
 # /api/*, así que el HTML no pasa por el Worker: estas son las mismas cabeceras
 # que añade securityHeaders() en src/worker/security/headers.ts. Un test
 # (test/worker/security.test.ts) comprueba que los valores coinciden.

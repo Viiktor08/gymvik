@@ -2,7 +2,7 @@ import type { RecordKind } from "../shared/records";
 import type { SetEntry } from "../shared/types";
 import type { WeeklySummary } from "../shared/weekly";
 
-/** Una sesión de un ejercicio en `GET /api/progress/exercise/:id` (contrato de la tarea 13). Más antigua primero. */
+/** Una sesión de un ejercicio en `GET /api/progress/exercise/:id`. Más antigua primero. */
 export type ExerciseSession = {
   localDate: string;
   maxWeight: number | null;
@@ -20,14 +20,14 @@ export type ExerciseProgress = {
   records: Partial<Record<RecordKind, { value: number; localDate: string }>>;
 };
 
-/** Una entrada de `GET /api/exercises/:id/history` (contrato de la tarea 11). Más reciente primero. */
+/** Una entrada de `GET /api/exercises/:id/history`. Más reciente primero. */
 export type ExerciseHistoryEntry = {
   workoutId: string;
   localDate: string;
   sets: SetEntry[];
 };
 
-/** Los rangos de `GET /api/progress/weight?range=` (contrato de la tarea 13). */
+/** Los rangos de `GET /api/progress/weight?range=`. */
 export type WeightRange = "4w" | "12w" | "all";
 
 /** Un punto de `GET /api/progress/weight`. Más antiguo primero; `avg7` es la media móvil de 7 días. */
@@ -38,7 +38,7 @@ export type WeightPoint = {
   avg7: number | null;
 };
 
-/** Respuesta de `GET /api/progress/week` (contrato de la tarea 13). */
+/** Respuesta de `GET /api/progress/week`. */
 export type WeekProgress = {
   current: WeeklySummary;
   previous: WeeklySummary;

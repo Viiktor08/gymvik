@@ -5,7 +5,7 @@ import { SEED_EXERCISES, seedExercises } from "../../src/worker/seed/exercises";
 const CATEGORIES = ["strength", "cardio", "core", "power", "mobility", "feet"];
 const NOTIFICATION_TYPES = ["today", "creatine", "steps", "streak", "weight"];
 
-// Columnas de la spec §4 (más las de avisos de §6), en el orden de la migración.
+// Columnas esperadas (más las de avisos), en el orden de la migración.
 const EXPECTED_COLUMNS: Record<string, string[]> = {
   exercises: ["id", "name", "category", "muscle", "description", "media_url", "is_custom", "archived"],
   routines: ["id", "name", "in_rotation", "rotation_order", "archived", "created_at"],
@@ -70,11 +70,11 @@ beforeAll(async () => {
 });
 
 describe("esquema de D1", () => {
-  it.each(Object.entries(EXPECTED_COLUMNS))("la tabla %s tiene las columnas de la spec", async (table, columns) => {
+  it.each(Object.entries(EXPECTED_COLUMNS))("la tabla %s tiene las columnas esperadas", async (table, columns) => {
     expect(await columnsOf(table)).toEqual(columns);
   });
 
-  it("no crea tablas de datos que no estén en la spec", async () => {
+  it("no crea tablas de datos que no estén previstas", async () => {
     const { results } = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name <> 'd1_migrations' ORDER BY name",
     ).all<{ name: string }>();

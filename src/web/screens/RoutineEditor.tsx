@@ -381,7 +381,7 @@ function RoutineForm({ routine, routines, names }: FormProps) {
   );
 }
 
-/** Crear (`/entreno/rutina/nueva`) o editar (`/entreno/rutina/:id`) una rutina (spec §5.2). */
+/** Crear (`/entreno/rutina/nueva`) o editar (`/entreno/rutina/:id`) una rutina. */
 export function RoutineEditor() {
   const { id = "" } = useParams();
   const isNew = id === "nueva";

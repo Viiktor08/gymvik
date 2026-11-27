@@ -15,7 +15,7 @@ import { WeightSection } from "../settings/WeightSection";
 import { applyTheme } from "../theme";
 import { useLoad } from "../useLoad";
 
-/** Ajustes (spec §5.7). Cada sección guarda lo suyo; los ajustes se piden una vez y reparten sus valores iniciales. */
+/** Ajustes. Cada sección guarda lo suyo; los ajustes se piden una vez y reparten sus valores iniciales. */
 export function Settings() {
   const { state, reload, setData } = useLoad(() => api<UserSettings>("/api/settings"));
   // Tras importar, las secciones que enseñan ajustes se vuelven a crear con los valores nuevos.

@@ -21,7 +21,7 @@ type Props = {
   onImported: () => void;
 };
 
-/** Datos (spec §5.7): exportar a un archivo JSON e importarlo de vuelta, sustituyendo todo tras confirmar. */
+/** Datos: exportar a un archivo JSON e importarlo de vuelta, sustituyendo todo tras confirmar. */
 export function DataSection({ onImported }: Props) {
   const ids = useId();
   const [exporting, setExporting] = useState(false);

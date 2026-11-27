@@ -35,7 +35,7 @@ function InstallHelp() {
   );
 }
 
-/** Notificaciones (spec §5.7 y §6): activar en este dispositivo, interruptor y hora por aviso, y aviso de prueba. */
+/** Notificaciones: activar en este dispositivo, interruptor y hora por aviso, y aviso de prueba. */
 export function NotificationsSection({ initial }: { initial: Preferences }) {
   const titleId = useId();
   const [preferences, setPreferences] = useState(initial);

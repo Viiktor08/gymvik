@@ -12,7 +12,7 @@ type Props = {
   onSaved: (exercise: Exercise) => void;
 };
 
-/** Formulario para crear o editar un ejercicio (spec §5.5). Va dentro de una hoja inferior. */
+/** Formulario para crear o editar un ejercicio. Va dentro de una hoja inferior. */
 export function ExerciseForm({ exercise, onSaved }: Props) {
   const [name, setName] = useState(exercise?.name ?? "");
   const [category, setCategory] = useState<Category>(exercise?.category ?? "strength");

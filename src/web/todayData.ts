@@ -1,6 +1,6 @@
 import type { Routine } from "../shared/types";
 
-/** Respuesta de `GET /api/today` (contrato de la tarea 13). */
+/** Respuesta de `GET /api/today`. */
 export type TodayData = {
   /** YYYY-MM-DD de hoy en la zona horaria de los ajustes. */
   date: string;

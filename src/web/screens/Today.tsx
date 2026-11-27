@@ -41,7 +41,7 @@ function weeks(n: number): string {
   return n === 1 ? "1 semana" : `${n} semanas`;
 }
 
-/** Pantalla Hoy (spec §5.1). */
+/** Pantalla Hoy. */
 export function Today() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [draft, setDraft] = useState(false);

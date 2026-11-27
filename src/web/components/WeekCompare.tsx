@@ -66,7 +66,7 @@ function semanas(n: number): string {
   return n === 1 ? "1 semana" : `${n} semanas`;
 }
 
-/** La semana actual frente a la anterior (spec §5.6), con una flecha ↑/↓ en cada métrica, y la racha. */
+/** La semana actual frente a la anterior, con una flecha ↑/↓ en cada métrica, y la racha. */
 export function WeekCompare({ data }: Props) {
   const streakId = useId();
   const { current, previous, streak, goal } = data;

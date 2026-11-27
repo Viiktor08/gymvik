@@ -16,7 +16,7 @@ type Props = {
   onClose: () => void;
 };
 
-/** Resumen previo a guardar, con las notas y, si cambió la estructura, la pregunta sobre la rutina (spec §5.3). */
+/** Resumen previo a guardar, con las notas y, si cambió la estructura, la pregunta sobre la rutina. */
 export function FinishSheet({ open, totals, notes, onNotes, structureChanged, busy, error, onFinish, onClose }: Props) {
   const notesId = useId();
   return (
